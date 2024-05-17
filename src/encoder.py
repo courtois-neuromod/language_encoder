@@ -11,23 +11,6 @@ from sklearn.linear_model import RidgeCV
 from sklearn.model_selection import GroupKFold
 
 
-@dataclass
-class DataBaseConfig:
-    """."""
-
-    # fmri_file: str = (
-    #     "sub-03_task-friends_space-MNI152NLin2009cAsym_atlas-MIST_desc-444_timeseries.h5"
-    # )
-    target_layer: int = 13
-    atlas: str = "MIST"
-    parcel: str = "444"
-    subject_id: str = "sub-03"
-    n_splits: int = 8
-    random_state: int = 42
-    test_season = "s03"  # season allocated for test
-    TR: float = 1.49
-
-
 def train_ridgeReg(
     X: np.array,
     y: np.array,

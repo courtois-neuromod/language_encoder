@@ -8,6 +8,7 @@ import h5py
 import nibabel as nib
 import numpy as np
 import pandas as pd
+import scipy.stats as stats
 from joblib import Parallel, delayed
 from nilearn.glm.first_level import compute_regressor
 from tqdm import tqdm
@@ -156,7 +157,6 @@ def build_target(
         np.concatenate(y_groups, axis=0) if run_groups is not None else np.array([])
     )
 
-
     return y_list, length_list, y_groups
 
 
@@ -186,6 +186,35 @@ def extract_one_hot_regressor(data_config, runs, run_length):
     return np.concatenate(x_list, axis=0)
 
 
+def scale_embedding(data_config, runs):
+    """."""
+    embedding = []
+    embedding_lengths = []
+    for run in tqdm(runs, desc="runs", total=len(runs)):
+        parts = run.split("_")
+        task = parts[1].split("_")
+        episode_name = task[0].split("_")
+        episode = episode_name[0].split("_")[-1].split(".")[0][5:15]
+        season = episode_name[0].split("_")[-1].split(".")[0][5:8]
+
+        emb = get_embedding(data_config, season, episode)
+        embedding.append(emb)
+
+        embedding_lengths.append(emb.shape[0])
+
+    feat_data = np.concatenate(embedding, axis=0)
+    feat_data_scaled = np.nan_to_num(
+        stats.zscore(
+            feat_data,
+            nan_policy="omit",
+            axis=0,
+        )
+    ).astype("float32")
+    original_embeddings = np.split(feat_data_scaled, np.cumsum(embedding_lengths[:-1]))
+
+    return original_embeddings
+
+
 def extract_feature_regressor(data_config, runs, run_length):
     """."""
     x_list = []
@@ -195,8 +224,6 @@ def extract_feature_regressor(data_config, runs, run_length):
         episode_name = task[0].split("_")
         episode = episode_name[0].split("_")[-1].split(".")[0][5:15]
         season = episode_name[0].split("_")[-1].split(".")[0][5:8]
-
-        # print(gentle)
 
         regressor_list = get_embedding_regressor(data_config, season, episode)
         # print(regressor_vector)
