@@ -199,7 +199,6 @@ def scale_embedding(data_config, runs):
 
         emb = get_embedding(data_config, season, episode)
         embedding.append(emb)
-
         embedding_lengths.append(emb.shape[0])
 
     feat_data = np.concatenate(embedding, axis=0)
@@ -211,13 +210,13 @@ def scale_embedding(data_config, runs):
         )
     ).astype("float32")
     original_embeddings = np.split(feat_data_scaled, np.cumsum(embedding_lengths[:-1]))
-
     return original_embeddings
 
 
 def extract_feature_regressor(data_config, runs, run_length):
     """."""
     x_list = []
+    embedding_list = scale_embedding(data_config, runs)
     for run_indx, run in tqdm(enumerate(runs), desc="runs", total=len(runs)):
         parts = run.split("_")
         task = parts[1].split("_")
@@ -225,9 +224,10 @@ def extract_feature_regressor(data_config, runs, run_length):
         episode = episode_name[0].split("_")[-1].split(".")[0][5:15]
         season = episode_name[0].split("_")[-1].split(".")[0][5:8]
 
-        regressor_list = get_embedding_regressor(data_config, season, episode)
-        # print(regressor_vector)
-        # print(len(regressor_vector))
+        regressor_list = get_embedding_regressor(
+            data_config, season, episode, embedding_list[run_indx]
+        )
+
         frame_times = np.arange(run_length[run_indx]) * data_config.TR
 
         computed_regressor = Parallel(n_jobs=-1)(
@@ -268,8 +268,7 @@ def get_embedding(
     return embedding
 
 
-def get_embedding_regressor(data_config, season, episode):
-    embedding = get_embedding(data_config, season, episode)
+def get_embedding_regressor(data_config, season, episode, embedding):
     gentle = read_tsv(f"{data_config.tr_tsv_path}/{season}/friends_{episode}.tsv")
     embedding_regressor = []
     for i in range(embedding.shape[1]):

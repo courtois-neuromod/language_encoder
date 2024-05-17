@@ -8,7 +8,7 @@ from utils import (
     split_episodes,
 )
 
-data_config = DataBaseConfig.DataConfig()
+data_config = DataBaseConfig()
 
 
 train_groups, train_runs, val_runs, test_runs, val_season = split_episodes(
