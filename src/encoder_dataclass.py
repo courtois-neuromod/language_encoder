@@ -18,7 +18,7 @@ class DataBaseConfig:
     stimuli_dir: str = (
         "/scratch/ibilgin/Dropbox/cneuromax/data/friends_language_encoder/stimuli/gpt2"
     )
-    output_dir: str = "/scratch/ibilgin/Dropbox/friends_encoder/data/ridge_regression"
+    output_dir: str = "/scratch/ibilgin/Dropbox/language_encoder/data/ridge_regression"
     tr_tsv_path: str = (
         "/scratch/ibilgin/Dropbox/cneuromax/data/friends_language_encoder/stimuli/word_alignment/"
     )

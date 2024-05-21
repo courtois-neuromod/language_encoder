@@ -5,47 +5,12 @@ from pathlib import Path
 from typing import Any
 
 import h5py
-import nibabel as nib
 import numpy as np
 import pandas as pd
-import scipy.stats as stats
 from joblib import Parallel, delayed
 from nilearn.glm.first_level import compute_regressor
+from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
-
-
-def list_seasons(
-    idir: str,
-) -> list:
-    """."""
-    season_list = [x.split("/")[-1] for x in sorted(glob.glob(f"{idir}/s0[0-9]"))]
-
-    return season_list
-
-
-def list_episodes(
-    idir: str,
-    season: str,
-    outfile: str = None,
-) -> list:
-    """.
-
-    Compile season's list of episodes to process.
-    """
-    all_epi = [
-        x.split("/")[-1].split(".")[0][8:15]
-        for x in sorted(glob.glob(f"{idir}/{season}/friends_s*.tsv"))
-    ]
-    if Path(outfile).exists():
-        season_h5_file = h5py.File(outfile, "r")
-        processed_epi = list(season_h5_file.keys())
-        season_h5_file.close()
-    else:
-        processed_epi = []
-
-    episode_list = [epi for epi in all_epi if epi not in processed_epi]
-
-    return episode_list
 
 
 def read_tsv(tsv_path):
@@ -186,8 +151,23 @@ def extract_one_hot_regressor(data_config, runs, run_length):
     return np.concatenate(x_list, axis=0)
 
 
-def scale_embedding(data_config, runs):
-    """."""
+def get_embedding(
+    data_config,
+    season: str,
+    episode: str,
+) -> np.array:
+    h5_path = (
+        Path(data_config.stimuli_dir)
+        / f"friends_{season}_layer_{data_config.target_layer - 1}_embeddings.h5"
+    )
+    # print(h5_path)
+    with h5py.File(h5_path, "r") as file:
+        embedding = np.array(file[episode])
+
+    return embedding
+
+
+def extract_embedding(data_config, runs):
     embedding = []
     embedding_lengths = []
     for run in tqdm(runs, desc="runs", total=len(runs)):
@@ -201,22 +181,49 @@ def scale_embedding(data_config, runs):
         embedding.append(emb)
         embedding_lengths.append(emb.shape[0])
 
-    feat_data = np.concatenate(embedding, axis=0)
-    feat_data_scaled = np.nan_to_num(
-        stats.zscore(
-            feat_data,
-            nan_policy="omit",
-            axis=0,
+    features = np.concatenate(embedding, axis=0)
+    print(f"length of features: {len(features)}")
+    return features, embedding_lengths
+
+def scale_embeddings(features,embedding_lengths, scaler=None):
+    """."""
+    if scaler is None:
+        scaler = StandardScaler().fit(features)
+    features_scaled = scaler.transform(features)
+    print(f"mean of embedding: {features_scaled.mean(axis=0)}")
+    print(f"std of embedding: {features_scaled.std(axis=0)}")
+
+
+    print(f"length of features_scaled: {len(features_scaled)}")
+
+    embedding_list = np.split(features_scaled, np.cumsum(embedding_lengths[:-1]))
+    return embedding_list, scaler
+
+def process_embeddings(data_config, runs, scaler=None):
+    """Extract and scale embeddings for given runs."""
+    features, lengths = extract_embedding(data_config, runs)
+    embeddings, scaler = scale_embeddings(features, lengths, scaler)
+    return embeddings, scaler
+
+
+def build_embedding_regressor(data_config, season, episode, embedding):
+    gentle = read_tsv(f"{data_config.tr_tsv_path}/{season}/friends_{episode}.tsv")
+    embedding_regressor = []
+    for i in range(embedding.shape[1]):
+        embedding_regressor.append(
+            np.stack(
+                (
+                    gentle["onset"].values,
+                    gentle["duration"].values,
+                    embedding[:, i],
+                )
+            )
         )
-    ).astype("float32")
-    original_embeddings = np.split(feat_data_scaled, np.cumsum(embedding_lengths[:-1]))
-    return original_embeddings
+    return embedding_regressor
 
-
-def extract_feature_regressor(data_config, runs, run_length):
+def extract_feature_regressor(data_config,embedding_list, runs, run_length):
     """."""
     x_list = []
-    embedding_list = scale_embedding(data_config, runs)
     for run_indx, run in tqdm(enumerate(runs), desc="runs", total=len(runs)):
         parts = run.split("_")
         task = parts[1].split("_")
@@ -224,7 +231,7 @@ def extract_feature_regressor(data_config, runs, run_length):
         episode = episode_name[0].split("_")[-1].split(".")[0][5:15]
         season = episode_name[0].split("_")[-1].split(".")[0][5:8]
 
-        regressor_list = get_embedding_regressor(
+        regressor_list = build_embedding_regressor(
             data_config, season, episode, embedding_list[run_indx]
         )
 
@@ -251,34 +258,3 @@ def extract_feature_regressor(data_config, runs, run_length):
 
     return np.concatenate(x_list, axis=0)
 
-
-def get_embedding(
-    data_config,
-    season: str,
-    episode: str,
-) -> np.array:
-    h5_path = (
-        Path(data_config.stimuli_dir)
-        / f"friends_{season}_layer_{data_config.target_layer - 1}_embeddings.h5"
-    )
-    # print(h5_path)
-    with h5py.File(h5_path, "r") as file:
-        embedding = np.array(file[episode])
-
-    return embedding
-
-
-def get_embedding_regressor(data_config, season, episode, embedding):
-    gentle = read_tsv(f"{data_config.tr_tsv_path}/{season}/friends_{episode}.tsv")
-    embedding_regressor = []
-    for i in range(embedding.shape[1]):
-        embedding_regressor.append(
-            np.stack(
-                (
-                    gentle["onset"].values,
-                    gentle["duration"].values,
-                    embedding[:, i],
-                )
-            )
-        )
-    return embedding_regressor
