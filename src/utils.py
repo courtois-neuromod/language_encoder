@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
 from nilearn.glm.first_level import compute_regressor
+from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
@@ -180,31 +181,54 @@ def extract_embedding(data_config, runs):
         emb = get_embedding(data_config, season, episode)
         embedding.append(emb)
         embedding_lengths.append(emb.shape[0])
-
     features = np.concatenate(embedding, axis=0)
-    print(f"length of features: {len(features)}")
+    # print(f"length of features: {len(features)}")
     return features, embedding_lengths
 
 def scale_embeddings(features,embedding_lengths, scaler=None):
     """."""
+
     if scaler is None:
-        scaler = StandardScaler().fit(features)
-    features_scaled = scaler.transform(features)
-    print(f"mean of embedding: {features_scaled.mean(axis=0)}")
-    print(f"std of embedding: {features_scaled.std(axis=0)}")
-
-
-    print(f"length of features_scaled: {len(features_scaled)}")
-
-    embedding_list = np.split(features_scaled, np.cumsum(embedding_lengths[:-1]))
-    return embedding_list, scaler
+        scaler =  StandardScaler().fit(features)
+    features_scaled=features
+    embeddings = np.split(features_scaled, np.cumsum(embedding_lengths[:-1]))
+    return embeddings, scaler
 
 def process_embeddings(data_config, runs, scaler=None):
     """Extract and scale embeddings for given runs."""
     features, lengths = extract_embedding(data_config, runs)
+
     embeddings, scaler = scale_embeddings(features, lengths, scaler)
+    # for i in embeddings:
+    #     print(f"shape after processing: {len(i)}")
     return embeddings, scaler
 
+# def process_embeddings(data_config, runs, scaler=None):
+#     """Extract and scale embeddings for given runs."""
+#     features, lengths = extract_embedding(data_config, runs)
+#     embeddings = np.split(features, np.cumsum(lengths[:-1]))
+#     return embeddings
+###### STANDARD SCALING #######
+# def scale_embedding(features, embedding_lengths):
+#     """."""
+#     features_scaled = np.nan_to_num(
+#         stats.zscore(
+#             features,
+#             nan_policy="omit",
+#             axis=0,
+#         )
+#     ).astype("float32")
+#     embeddings = np.split(features_scaled, np.cumsum(embedding_lengths[:-1]))
+# #     return embeddings, scaler
+#     return embeddings
+
+# def process_embeddings(data_config, runs, scaler=None):
+#     """Extract and scale embeddings for given runs."""
+#     features, lengths = extract_embedding(data_config, runs)
+#     embeddings = scale_embedding(features, lengths)
+#     # for i in embeddings:
+#     #     print(f"shape after processing: {len(i)}")
+#     return embeddings
 
 def build_embedding_regressor(data_config, season, episode, embedding):
     gentle = read_tsv(f"{data_config.tr_tsv_path}/{season}/friends_{episode}.tsv")

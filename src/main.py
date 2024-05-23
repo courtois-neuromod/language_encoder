@@ -1,9 +1,13 @@
 from dataclasses import dataclass
 
+import numpy as np
+import scipy.stats as stats
 from encoder import test_ridgeReg, train_ridgeReg
 from encoder_dataclass import DataBaseConfig
+from sklearn.preprocessing import StandardScaler
 from utils import (
     build_target,
+    extract_embedding,
     extract_feature_regressor,
     process_embeddings,
     split_episodes,
@@ -22,31 +26,19 @@ y_train, length_train, train_groups = build_target(
     train_runs,
     train_groups,
 )
-# breakpoint()
+
+features, lengths = extract_embedding(data_config, train_runs)
+
 train_embeddings, scaler = process_embeddings(data_config, train_runs)
 
-print(f"scaler mean: {scaler.mean_}")
-print(f"scaler scale: {scaler.scale_}")
-
-print(f"length of train_embeddings: {len(train_embeddings)}")
-
-
 x_train = extract_feature_regressor(data_config, train_embeddings, train_runs, length_train)
-print(f"length of x_train: {len(x_train)}")
-print(f"length of y_train: {len(y_train)}")
 
 
 y_val, length_val, _ = build_target(data_config, val_runs)
-print(f"length of val_runs: {len(val_runs)}")
 
-print(f"length of y_val: {len(y_val)}")
-val_embeddings, _ = process_embeddings(data_config, val_runs, scaler)
-print(f"length of val_embeddings: {len(val_embeddings)}")
-
+val_embeddings, _= process_embeddings(data_config, val_runs, scaler)
 
 x_val = extract_feature_regressor(data_config, val_embeddings, val_runs, length_val)
-print(f"length of x_val: {len(x_val)}")
-
 
 model = train_ridgeReg(
     x_train,
@@ -54,7 +46,6 @@ model = train_ridgeReg(
     train_groups,
     data_config,
 )
-
 
 test_ridgeReg(
     data_config,

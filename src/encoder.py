@@ -109,7 +109,7 @@ def export_images(
         )
         nib.save(
             nii_file,
-            f"{data_config.output_dir}/{data_config.subject_id}_{data_config.atlas}_{data_config.parcel}_RidgeReg_R2_{s}.nii.gz",
+            f"{data_config.output_dir}/{data_config.subject_id}_{data_config.atlas}_{data_config.parcel}_RidgeReg_R2_{s}_SCIKIT_scale_validation.nii.gz",
         )
 
     return
