@@ -5,6 +5,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pandas as pd
+import scipy.stats as stats
 from joblib import Parallel, delayed
 from nilearn.glm.first_level import compute_regressor
 from sklearn.preprocessing import StandardScaler
@@ -25,10 +26,6 @@ def generate_one_hot_vector(gentle):
     word = gentle["word"].to_numpy()
     duration = np.zeros(len(word))
     regressor_vector = np.stack([onsets, duration, word])
-    # print(onsets)
-    # print(word)
-    # print(duration)
-
     return regressor_vector
 
 
@@ -154,6 +151,7 @@ def get_embedding(
     season: str,
     episode: str,
 ) -> np.array:
+    """."""
     h5_path = (
         Path(data_config.stimuli_dir)
         / f"friends_{season}_layer_{data_config.target_layer - 1}_embeddings.h5"
@@ -166,6 +164,7 @@ def get_embedding(
 
 
 def extract_embedding(data_config, runs):
+    """."""
     embedding = []
     embedding_lengths = []
     for run in tqdm(runs, desc="runs", total=len(runs)):
@@ -182,48 +181,50 @@ def extract_embedding(data_config, runs):
     # print(f"length of features: {len(features)}")
     return features, embedding_lengths
 
-def scale_embeddings(features,embedding_lengths, scaler=None):
-    """."""
+def scale_embeddings(features,embedding_lengths, scaling = None, scaler=None):
+    """
+    Scales feature embeddings according to the specified scaling method.
 
-    if scaler is None:
-        scaler =  StandardScaler().fit(features)
-    features_scaled =scaler.transform(features).astype("float32")
+    Parameters:
+        features (np.array): The input features to scale.
+        embedding_lengths (list): List of embedding lengths to split the features after scaling.
+        scaling (str, optional): The type of scaling to apply. Options are:
+            None - apply no scaling.
+            'standard' - apply standardization (z-score normalization).
+            'scaler' - apply scaling using a provided scaler or a new StandardScaler.
+        scaler (StandardScaler, optional): An instance of a scaler to use if scaling='scaler'. If None and scaling='scaler', a new StandardScaler will be fit.
+
+    Returns:
+        tuple: A tuple containing the list of scaled embeddings and the scaler used (if any).
+    """
+    if scaling is None:
+        features_scaled = features
+    elif scaling == "standard":
+        features_scaled = np.nan_to_num(
+            stats.zscore(
+                features,
+                nan_policy="omit",
+                axis=0,
+            )
+        ).astype("float32")
+    elif scaling == "scaler":
+        if scaler is None:
+            scaler =  StandardScaler().fit(features)
+        features_scaled =scaler.transform(features).astype("float32")
+    else:
+        raise ValueError(f"Unknown scaling type: {scaling}")
+
+
     embeddings = np.split(features_scaled, np.cumsum(embedding_lengths[:-1]))
+
     return embeddings, scaler
 
 def process_embeddings(data_config, runs, scaler=None):
     """Extract and scale embeddings for given runs."""
     features, lengths = extract_embedding(data_config, runs)
 
-    embeddings, scaler = scale_embeddings(features, lengths, scaler)
+    embeddings, scaler = scale_embeddings(features, lengths, scaler, )
     return embeddings, scaler
-
-# def process_embeddings(data_config, runs, scaler=None):
-#     """Extract and scale embeddings for given runs."""
-#     features, lengths = extract_embedding(data_config, runs)
-#     embeddings = np.split(features, np.cumsum(lengths[:-1]))
-#     return embeddings
-###### STANDARD SCALING #######
-# def scale_embedding(features, embedding_lengths):
-#     """."""
-#     features_scaled = np.nan_to_num(
-#         stats.zscore(
-#             features,
-#             nan_policy="omit",
-#             axis=0,
-#         )
-#     ).astype("float32")
-#     embeddings = np.split(features_scaled, np.cumsum(embedding_lengths[:-1]))
-# #     return embeddings, scaler
-#     return embeddings
-
-# def process_embeddings(data_config, runs, scaler=None):
-#     """Extract and scale embeddings for given runs."""
-#     features, lengths = extract_embedding(data_config, runs)
-#     embeddings = scale_embedding(features, lengths)
-#     # for i in embeddings:
-#     #     print(f"shape after processing: {len(i)}")
-#     return embeddings
 
 def build_embedding_regressor(data_config, season, episode, embedding):
     gentle = read_tsv(f"{data_config.tr_tsv_path}/{season}/friends_{episode}.tsv")
