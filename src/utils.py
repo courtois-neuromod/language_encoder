@@ -1,15 +1,12 @@
 """``project`` utilities."""
 
-import glob
 from pathlib import Path
-from typing import Any
 
 import h5py
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
 from nilearn.glm.first_level import compute_regressor
-from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
@@ -190,7 +187,7 @@ def scale_embeddings(features,embedding_lengths, scaler=None):
 
     if scaler is None:
         scaler =  StandardScaler().fit(features)
-    features_scaled=features
+    features_scaled =scaler.transform(features).astype("float32")
     embeddings = np.split(features_scaled, np.cumsum(embedding_lengths[:-1]))
     return embeddings, scaler
 
@@ -199,8 +196,6 @@ def process_embeddings(data_config, runs, scaler=None):
     features, lengths = extract_embedding(data_config, runs)
 
     embeddings, scaler = scale_embeddings(features, lengths, scaler)
-    # for i in embeddings:
-    #     print(f"shape after processing: {len(i)}")
     return embeddings, scaler
 
 # def process_embeddings(data_config, runs, scaler=None):
@@ -281,4 +276,3 @@ def extract_feature_regressor(data_config,embedding_list, runs, run_length):
         x_list.append(computed_regressor)
 
     return np.concatenate(x_list, axis=0)
-
