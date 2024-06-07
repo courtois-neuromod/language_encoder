@@ -85,6 +85,9 @@ def pearson_corr(
 def export_images(
     data_config,
     results: dict,
+    layer_indx: int,
+    train_seasons: list,
+    episode: str,
 ) -> None:
     """.
 
@@ -109,7 +112,7 @@ def export_images(
         )
         nib.save(
             nii_file,
-            f"{data_config.output_dir}/{data_config.subject_id}_{data_config.atlas}_{data_config.parcel}_RidgeReg_R2_{s}_SCIKIT_scale_validation.nii.gz",
+            f"{data_config.output_dir}/{data_config.subject_id}/{data_config.experiment}//{train_seasons[0]}/{data_config.subject_id}_{episode}_{data_config.atlas}_{data_config.parcel}_RidgeReg_R2_{s}_{data_config.base_model_name}_layer_{layer_indx}.nii.gz",
         )
 
     return
@@ -122,6 +125,9 @@ def test_ridgeReg(
     y_train,
     x_val,
     y_val,
+    layer_indx,
+    train_seasons,
+    episode,
 ) -> None:
     """.
 
@@ -146,7 +152,7 @@ def test_ridgeReg(
     # export RR results
     Path(f"{data_config.output_dir}").mkdir(parents=True, exist_ok=True)
     with open(
-        f"{data_config.output_dir}/{data_config.subject_id}_ridgeReg_{data_config.atlas}_{data_config.parcel}_result.json",
+        f"{data_config.output_dir}/{data_config.subject_id}/{data_config.experiment}//{train_seasons[0]}/{data_config.subject_id}_{episode}_ridgeReg_{data_config.atlas}_{data_config.parcel}_result.json",
         "w",
     ) as fp:
         json.dump(res_dict, fp)
@@ -156,4 +162,7 @@ def test_ridgeReg(
         export_images(
             data_config,
             res_dict,
+            layer_indx,
+            train_seasons,
+            episode,
         )

@@ -1,5 +1,7 @@
 """``project`` utilities."""
 
+import glob
+import os
 from pathlib import Path
 
 import h5py
@@ -11,6 +13,38 @@ from nilearn.glm.first_level import compute_regressor
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
+
+def list_seasons(
+    idir: str,
+) -> list:
+    """."""
+    season_list = [x.split("/")[-1] for x in sorted(glob.glob(f"{idir}/s0[0-9]"))]
+
+    return season_list
+
+
+def list_episodes(
+    idir: str,
+    season: str,
+    outfile: str = None,
+) -> list:
+    """.
+    Compile season's list of episodes to process.
+    """
+    all_epi = [
+        x.split("/")[-1].split(".")[0][8:15]
+        for x in sorted(glob.glob(f"{idir}/{season}/friends_s*.tsv"))
+    ]
+    if Path(outfile).exists():
+        season_h5_file = h5py.File(outfile, "r")
+        processed_epi = list(season_h5_file.keys())
+        season_h5_file.close()
+    else:
+        processed_epi = []
+
+    episode_list = [epi for epi in all_epi if epi not in processed_epi]
+
+    return episode_list
 
 def read_tsv(tsv_path):
     """."""
@@ -27,6 +61,85 @@ def generate_one_hot_vector(gentle):
     duration = np.zeros(len(word))
     regressor_vector = np.stack([onsets, duration, word])
     return regressor_vector
+
+
+
+
+def moderate_split_data(
+    data_config,
+    train_seasons,
+) -> tuple:
+    """.
+
+    Assigns subject's runs to train, validation and test sets
+    - Iterate on seasons
+    - Run 8 crossfold for training on that season
+    -The rest
+    """
+    sub_h5 = h5py.File(
+        f"{data_config.bold_dir}/{data_config.subject_id}/func/"
+        f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_"
+        f"atlas-{data_config.atlas}_desc-{data_config.parcel}_timeseries.h5",
+        "r",
+    )
+
+
+    # Season 3 held out for test set
+    test_set = []
+    for ses in sub_h5:
+        test_set += [
+            x for x in sub_h5[ses] if x.split("-")[-1][:3] == data_config.test_season
+        ]
+
+
+    train_val_set = []
+
+    for train_season in train_seasons:
+        # print(train_season)
+        for ses in sub_h5:
+            train_val_set += [
+                x for x in sub_h5[ses] if x.split("-")[-1][:3] == train_season
+            ]
+    # print(train_val_set)
+
+
+    if data_config.subject_id == "sub-04":
+        val_seasons = ["s01", "s02", "s04"]
+        val_seasons.remove(train_season)
+    else:
+        val_seasons = ["s01", "s02", "s04", "s05", "s06"]
+        val_seasons.remove(train_season)
+
+    val_set = []
+    for ses in sub_h5:
+        for val_season in val_seasons:
+            val_set += [x for x in sub_h5[ses] if x.split("-")[-1][:3] == val_season]
+
+    test_val_seasons = val_seasons
+
+    test_val_seasons.append(data_config.test_season)
+
+    # print(f"test_val_seasons: {test_val_seasons}")
+    train_set = []
+    for ses in sub_h5:
+        train_set += [
+            x
+            for x in sub_h5[ses]
+            if x.split("-")[-1][:3] not in test_val_seasons
+        ]
+    train_set = sorted(train_set)
+    # print(f"train_set: {train_set}")
+    sub_h5.close()
+
+    # Assign consecutive train set episodes to cross-validation groups
+    lts = len(train_set)
+    # print(f"lts: {lts}")
+    # print(np.arange(lts) / (lts / data_config.n_splits))
+    train_groups = (
+        np.floor(np.arange(lts) / (lts / data_config.n_splits)).astype(int).tolist()
+    )
+
+    return train_groups, train_set, val_set, test_set, val_season
 
 
 def split_episodes(
@@ -120,6 +233,34 @@ def build_target(
     return y_list, length_list, y_groups
 
 
+def build_val_target(
+    data_config,
+    run: list,
+) -> tuple:
+    """.
+
+    Concatenates BOLD timeseries into target array.
+    """
+    y_val = []
+    length_list = []
+    sub_h5 = h5py.File(
+        f"{data_config.bold_dir}/{data_config.subject_id}/func/"
+        f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_"
+        f"atlas-{data_config.atlas}_desc-{data_config.parcel}_timeseries.h5",
+        "r",
+    )
+
+    ses = run[0].split("_")[0]
+    y_val = np.array(sub_h5[ses][run[0]])
+    length_list.append(y_val.shape[0])
+
+    sub_h5.close()
+    return y_val, length_list
+
+
+
+
+
 def extract_one_hot_regressor(data_config, runs, run_length):
     """."""
     x_list = []
@@ -150,20 +291,25 @@ def get_embedding(
     data_config,
     season: str,
     episode: str,
+    layer_indx: int,
 ) -> np.array:
     """."""
-    h5_path = (
-        Path(data_config.stimuli_dir)
-        / f"friends_{season}_layer_{data_config.target_layer - 1}_embeddings.h5"
-    )
-    # print(h5_path)
+    if data_config.finetuned:
+        file_tag = "finetuned"
+    else:
+        folder_tag = "base_"
+        file_tag = "base"
+    outfolder = f"{data_config.stimuli_dir}/{data_config.base_model_name}/{folder_tag}/layer_{layer_indx}"
+    h5_path = f"{outfolder}/friends_{season}_embeddings_{data_config.base_model_name}_{file_tag}_layer_{layer_indx}.h5"
+
+
     with h5py.File(h5_path, "r") as file:
         embedding = np.array(file[episode])
 
     return embedding
 
 
-def extract_embedding(data_config, runs):
+def extract_embedding(data_config, runs,layer_indx):
     """."""
     embedding = []
     embedding_lengths = []
@@ -174,12 +320,17 @@ def extract_embedding(data_config, runs):
         episode = episode_name[0].split("_")[-1].split(".")[0][5:15]
         season = episode_name[0].split("_")[-1].split(".")[0][5:8]
 
-        emb = get_embedding(data_config, season, episode)
+        emb = get_embedding(data_config, season, episode,layer_indx)
         embedding.append(emb)
         embedding_lengths.append(emb.shape[0])
-    features = np.concatenate(embedding, axis=0)
+    # if len(embedding) > 1:
+        features = np.concatenate(embedding, axis=0)
+    # elif len(embedding) == 1:
+    #     features = emb
+
     # print(f"length of features: {len(features)}")
     return features, embedding_lengths
+
 
 def scale_embeddings(features,embedding_lengths, scaling = None, scaler=None):
     """
@@ -219,17 +370,22 @@ def scale_embeddings(features,embedding_lengths, scaling = None, scaler=None):
 
     return embeddings, scaler
 
-def process_embeddings(data_config, runs, scaler=None):
+def process_embeddings(data_config, runs, layer_indx, scaler=None):
     """Extract and scale embeddings for given runs."""
-    features, lengths = extract_embedding(data_config, runs)
+    features, lengths = extract_embedding(data_config, runs, layer_indx)
 
-    embeddings, scaler = scale_embeddings(features, lengths, scaler, )
+    embeddings, scaler = scale_embeddings(features, lengths, scaler)
     return embeddings, scaler
+
 
 def build_embedding_regressor(data_config, season, episode, embedding):
     gentle = read_tsv(f"{data_config.tr_tsv_path}/{season}/friends_{episode}.tsv")
     embedding_regressor = []
     for i in range(embedding.shape[1]):
+        # print(len(gentle["onset"].values))
+        # print(len(gentle["duration"].values))
+        # print(len(embedding[:, i]))
+
         embedding_regressor.append(
             np.stack(
                 (
@@ -277,3 +433,21 @@ def extract_feature_regressor(data_config,embedding_list, runs, run_length):
         x_list.append(computed_regressor)
 
     return np.concatenate(x_list, axis=0)
+
+
+
+def get_season_average_images(data_config, train_seasons):
+
+    if data_config.subject_id == "sub-04":
+        val_seasons = ["s01", "s02", "s04"]
+        val_seasons.remove(train_seasons[0])
+    else:
+        val_seasons = ["s01", "s02", "s04", "s05", "s06"]
+        val_seasons.remove(train_seasons[0])
+    for season in val_seasons:
+        all_epi = [ ]
+        for x in sorted(glob.glob(f"{data_config.output_dir}/{data_config.subject_id}/{data_config.experiment}/{train_seasons[0]}/*")):
+            filename = os.path.basename(x)
+            if filename.split("_")[1][:3] == season:
+                all_epi.append(x)
+        print(all_epi)        print(all_epi)        print(all_epi)
