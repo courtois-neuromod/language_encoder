@@ -2,8 +2,8 @@ from dataclasses import dataclass
 
 from encoder import test_ridgeReg, train_ridgeReg
 from encoder_dataclass import DataBaseConfig
-from utils import (build_target, extract_feature_regressor,
-                   process_embeddings, split_episodes)
+from utils import (build_target, extract_feature_regressor, process_embeddings,
+                   split_episodes)
 
 data_config = DataBaseConfig()
 
@@ -46,6 +46,10 @@ for layer_indx in range(1,13): #data_config.target_layer):
         model,
         x_train,
         y_train,
+        x_val,
+        y_val,
+        layer_indx,
+    )
         x_val,
         y_val,
         layer_indx,
