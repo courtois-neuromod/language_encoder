@@ -17,8 +17,19 @@ def train_ridgeReg(
     groups: list,
     data_config,
 ) -> RidgeCV:
-    """."""
+    """Trains ridge regression folding over the given groups.
+
+    Args:
+        X: Features
+        y: Bold data
+        groups: The data assigned to consequtive groups
+
+    Return:
+        Model that is fit with the training data.
+    """
     alphas = np.logspace(0.1, 3, 10)
+
+    # alphas = np.logspace(0.1, 6, 10)
     group_kfold = GroupKFold(n_splits=data_config.n_splits)
     cv = group_kfold.split(X, y, groups)
     model = RidgeCV(
@@ -27,7 +38,6 @@ def train_ridgeReg(
         # normalize=False,
         cv=cv,
     )
-
     return model.fit(X, y)
 
 
@@ -39,6 +49,14 @@ def pairwise_acc(
     """.
 
     Computes Pairwise accuracy
+
+    Args:
+        target: Original data
+        predicted: Output of the model predicton
+        use_distane: True if to use cosine similarity
+
+    Returns:
+        Pairwise correlation score
     """
     true_count = 0
     total = 0
@@ -86,8 +104,9 @@ def export_images(
     data_config,
     results: dict,
     layer_indx: int,
-    train_seasons: list,
-    episode: str,
+    train_season: str,
+    stage: str,
+    episode: None,
 ) -> None:
     """.
 
@@ -106,13 +125,21 @@ def export_images(
     atlas_masker.fit()
 
     # map Pearson correlations onto brain parcels
-    for s in ["train", "val"]:
-        nii_file = atlas_masker.inverse_transform(
-            np.array(results["parcelwise"][f"{s}_R2"]),
-        )
+
+    nii_file = atlas_masker.inverse_transform(
+        np.array(results["parcelwise"][f"{stage}_R2"]),
+    )
+    if episode == None:
+
         nib.save(
             nii_file,
-            f"{data_config.output_dir}/{data_config.subject_id}/{data_config.experiment}//{train_seasons[0]}/{data_config.subject_id}_{episode}_{data_config.atlas}_{data_config.parcel}_RidgeReg_R2_{s}_{data_config.base_model_name}_layer_{layer_indx}.nii.gz",
+            f"{data_config.output_dir}/{data_config.subject_id}/{data_config.experiment}//{train_season}/{data_config.subject_id}_{data_config.atlas}_{data_config.parcel}_RidgeReg_R2_{s}_{data_config.base_model_name}_layer_{layer_indx}.nii.gz",
+        )
+
+    else:
+         nib.save(
+            nii_file,
+            f"{data_config.output_dir}/{data_config.subject_id}/{data_config.experiment}//{train_season}/{data_config.subject_id}_{episode}_{data_config.atlas}_{data_config.parcel}_RidgeReg_R2_{s}_{data_config.base_model_name}_layer_{layer_indx}.nii.gz",
         )
 
     return
@@ -121,41 +148,28 @@ def export_images(
 def test_ridgeReg(
     data_config,
     R,
-    x_train,
-    y_train,
-    x_val,
-    y_val,
+    x_data,
+    y_data,
     layer_indx,
-    train_seasons,
-    episode,
+    train_season,
+    episode: None,
+    stage: str,
 ) -> None:
     """.
 
     Exports RR results in .json file.
     """
     res_dict = {}
-
-    # Global R2 score
-    res_dict["train_R2"] = R.score(x_train, y_train)
-    res_dict["val_R2"] = R.score(x_val, y_val)
-
-    # Parcel-wise predictions
-    pred_train = R.predict(x_train)
-    pred_val = R.predict(x_val)
-
     res_dict["parcelwise"] = {}
-    res_dict["parcelwise"]["train_R2"] = (
-        pearson_corr(y_train.T, pred_train.T) ** 2
+    # Global R2 score
+    res_dict[f"{stage}_R2"] = R.score(x_data, y_data)
+    pred = R.predict(x_data)
+    res_dict["parcelwise"][f"{stage}_R2"] = (
+    pearson_corr(y_data.T, pred.T) ** 2
     ).tolist()
-    res_dict["parcelwise"]["val_R2"] = (pearson_corr(y_val.T, pred_val.T) ** 2).tolist()
 
-    # export RR results
     Path(f"{data_config.output_dir}").mkdir(parents=True, exist_ok=True)
-    with open(
-        f"{data_config.output_dir}/{data_config.subject_id}/{data_config.experiment}//{train_seasons[0]}/{data_config.subject_id}_{episode}_ridgeReg_{data_config.atlas}_{data_config.parcel}_result.json",
-        "w",
-    ) as fp:
-        json.dump(res_dict, fp)
+
 
     # export parcelwise scores as .nii images for visualization
     if data_config.bold_dir is not None:
@@ -163,6 +177,7 @@ def test_ridgeReg(
             data_config,
             res_dict,
             layer_indx,
-            train_seasons,
+            train_season,
             episode,
+            stage
         )

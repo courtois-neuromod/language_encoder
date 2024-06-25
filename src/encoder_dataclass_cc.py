@@ -13,26 +13,10 @@ class DataBaseConfig:
     random_state: int = 42
     test_season = "s03"  # season allocated for test
     TR: float = 1.49
-
-    bold_dir: str = "/project/rrg-pbellec/isilb/datasets/friends"
-    stimuli_dir: str = (
-        "/scratch/ibilgin/Dropbox/cneuromax/data/friends_language_encoder/stimuli/"
-    )
-    output_dir: str = "/scratch/ibilgin/Dropbox/language_encoder/data/ridge_regression"
-    tr_tsv_path: str = (
-        "/scratch/ibilgin/Dropbox/cneuromax/data/friends_language_encoder/stimuli/word_alignment/"
-    )
-    # bold_dir: str = "G:\experiments\\friends.timeseries"
-    # embedding_dir: str = (
-    #     "G:\experiments\data\\friends_language_encoder\stimuli"
-    # )
-    # output_dir: str = "G:\experiments\data\\friends_language_encoder\\ridge_regression"
-    # tr_tsv_path: str = (
-    #     "G:\experiments\data\\friends_language_encoder\stimuli/word_alignment/"
-    # )
+    bold_dir: str = "/scratch/isilb/datasets/friends"
+    stimuli_dir: str = "/scratch/isilb/datasets/stimuli/"
+    output_dir: str = "/scratch/isilb/datasets/ridge_regression"
     hrf_model = "spm"
-    model = "BertModel"
-    tokenizer = "BertTokenizer"
     finetuned = False
     sweep: str = "overrides#lr~0.0001161#wd~0.001303"
     base_model_name: str = "gpt2"
