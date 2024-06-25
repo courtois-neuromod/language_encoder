@@ -1,17 +1,13 @@
 """."""
 
-from encoder import test_ridgeReg, train_ridgeReg
+import numpy as np
+
+# from utils import get_season_average_images
+from encoder import test_ridgeReg
 from encoder_dataclass import DataBaseConfig
 from ridge_tools import cross_val_ridge
-from utils import (
-    build_target,
-    build_val_target,
-    extract_feature_regressor,
-    process_embeddings,
-    split_data_per_training_season,
-)
-from sklearn.model_selection import GroupKFold, KFold
-import numpy as np
+from utils import (build_target, build_val_target, extract_feature_regressor,
+                   process_embeddings, split_data_per_training_season)
 
 data_config = DataBaseConfig()
 
@@ -114,3 +110,15 @@ for training_season in seasons:
 
             print("Saved the validation prediction map!")
 
+
+
+# data_config = DataBaseConfig()
+# train_seasons = ["s01","s02", "s03", "s04", "s05", "s06"]
+# train_seasons.remove(data_config.test_season)
+
+# # layer_index = "2"
+# data_type = "val"
+# for season in train_seasons:
+#     print(f"training_season:{season}")
+#     train_season = [season]
+#     get_season_average_images(data_config, train_season, data_type)
