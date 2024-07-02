@@ -131,8 +131,6 @@ def export_images(
             f"{data_config.bold_dir}/{data_config.subject_id}/func/"
             f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_mask.nii.gz",
         )
-        sub-03_task-friends_space-
-
     atlas_masker = NiftiLabelsMasker(
         labels_img=atlas_path,
         standardize=False,
