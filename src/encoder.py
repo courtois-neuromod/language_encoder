@@ -118,14 +118,14 @@ def export_images(
     Exports RR parcelwise scores as nifti files with
     subject-specific atlas used to extract timeseries.
     """
-    
-    if data_config. == "parcelwise":
+
+    if data_config.encoding_level == "parcelwise":
         atlas_path = Path(
             f"{data_config.bold_dir}/{data_config.subject_id}/func/"
             f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_atlas-{data_config.atlas}_"
             f"desc-{data_config.parcel}_dseg.nii.gz",
         )
-    elif data_config == "voxelwise":
+    elif data_config.encoding_level == "voxelwise":
 
         atlas_path = Path(
             f"{data_config.bold_dir}/{data_config.subject_id}/func/"
@@ -150,7 +150,7 @@ def export_images(
         )
 
     else:
-         nib.save(
+        nib.save(
             nii_file,
             f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}//{train_season}/{data_config.subject_id}_{episode}_RidgeReg_R2_val_{data_config.base_model_name}_layer_{layer_indx}.nii.gz",
         )
@@ -165,24 +165,22 @@ def test_ridgeReg_parcelwise(
     y_data,
     layer_indx,
     train_seasons,
-    episode = None,
+    episode=None,
 ) -> None:
     """.
 
     Exports RR results in .json file.
     """
     res_dict = {}
-    res_dict["correlation"]= {}
-    res_dict["R2"]= {}
+    res_dict["correlation"] = {}
+    res_dict["R2"] = {}
 
     # Global R2 score
     res_dict["correlation"] = R.score(x_data, y_data)
 
     # Parcel-wise predictions
     pred = R.predict(x_data)
-    res_dict["R2"] = (
-        pearson_corr(y_data.T, pred.T) ** 2 
-    ).tolist()
+    res_dict["R2"] = (pearson_corr(y_data.T, pred.T) ** 2).tolist()
 
     # export parcelwise scores as .nii images for visualization
     if data_config.bold_dir is not None:
@@ -221,23 +219,20 @@ def test_ridgeReg_voxelwise(
     Exports RR results in .json file.
     """
     res_dict = {}
-    res_dict["correlation"]= {}
-    res_dict["R2"]= {}
+    res_dict["correlation"] = {}
+    res_dict["R2"] = {}
     # Global R2 score
     print(f"x_data.shape: {x_data.shape}")
     print(f"y_data.shape: {y_data.shape}")
-
 
     preds = np.dot(x_data, weights)
     res_dict["correlation"] = corr(preds, y_data)
     res_dict["R2"] = R2(preds, y_data)
     # res_dict["R2"] = (
-    #     pearson_corr(y_data.T, preds.T) ** 2 
+    #     pearson_corr(y_data.T, preds.T) ** 2
     # ).tolist()
 
-
     Path(f"{data_config.output_dir}").mkdir(parents=True, exist_ok=True)
-
 
     # export parcelwise scores as .nii images for visualization
     if data_config.bold_dir is not None:
