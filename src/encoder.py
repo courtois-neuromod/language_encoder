@@ -9,6 +9,12 @@ from scipy.spatial.distance import cosine
 from scipy.stats import pearsonr
 from sklearn.linear_model import RidgeCV
 from sklearn.model_selection import GroupKFold
+from scipy.stats import zscore
+import time
+from numpy.linalg import inv, svd
+from scipy.stats import zscore
+from sklearn.linear_model import Ridge, RidgeCV
+from sklearn.model_selection import KFold
 
 
 def train_ridgeReg(
@@ -105,7 +111,6 @@ def export_images(
     results: dict,
     layer_indx: int,
     train_season: str,
-    stage: str,
     episode: None,
 ) -> None:
     """.
@@ -113,11 +118,21 @@ def export_images(
     Exports RR parcelwise scores as nifti files with
     subject-specific atlas used to extract timeseries.
     """
-    atlas_path = Path(
-        f"{data_config.bold_dir}/{data_config.subject_id}/func/"
-        f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_atlas-{data_config.atlas}_"
-        f"desc-{data_config.parcel}_dseg.nii.gz",
-    )
+    
+    if data_config. == "parcelwise":
+        atlas_path = Path(
+            f"{data_config.bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_atlas-{data_config.atlas}_"
+            f"desc-{data_config.parcel}_dseg.nii.gz",
+        )
+    elif data_config == "voxelwise":
+
+        atlas_path = Path(
+            f"{data_config.bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_mask.nii.gz",
+        )
+        sub-03_task-friends_space-
+
     atlas_masker = NiftiLabelsMasker(
         labels_img=atlas_path,
         standardize=False,
@@ -127,46 +142,101 @@ def export_images(
     # map Pearson correlations onto brain parcels
 
     nii_file = atlas_masker.inverse_transform(
-        np.array(results["parcelwise"][f"{stage}_R2"]),
+        np.array(results["R2"]),
     )
     if episode == None:
 
         nib.save(
             nii_file,
-            f"{data_config.output_dir}/{data_config.subject_id}/{data_config.experiment}//{train_season}/{data_config.subject_id}_{data_config.atlas}_{data_config.parcel}_RidgeReg_R2_{s}_{data_config.base_model_name}_layer_{layer_indx}.nii.gz",
+            f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}//{train_season}/{data_config.subject_id}_RidgeReg_R2_train_{data_config.base_model_name}_layer_{layer_indx}.nii.gz",
         )
 
     else:
          nib.save(
             nii_file,
-            f"{data_config.output_dir}/{data_config.subject_id}/{data_config.experiment}//{train_season}/{data_config.subject_id}_{episode}_{data_config.atlas}_{data_config.parcel}_RidgeReg_R2_{s}_{data_config.base_model_name}_layer_{layer_indx}.nii.gz",
+            f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}//{train_season}/{data_config.subject_id}_{episode}_RidgeReg_R2_val_{data_config.base_model_name}_layer_{layer_indx}.nii.gz",
         )
 
     return
 
 
-def test_ridgeReg(
+def test_ridgeReg_parcelwise(
     data_config,
     R,
     x_data,
     y_data,
     layer_indx,
-    train_season,
-    episode: None,
-    stage: str,
+    train_seasons,
+    episode = None,
 ) -> None:
     """.
 
     Exports RR results in .json file.
     """
     res_dict = {}
-    res_dict["parcelwise"] = {}
+    res_dict["correlation"]= {}
+    res_dict["R2"]= {}
+
     # Global R2 score
-    res_dict[f"{stage}_R2"] = R.score(x_data, y_data)
+    res_dict["correlation"] = R.score(x_data, y_data)
+
+    # Parcel-wise predictions
     pred = R.predict(x_data)
-    res_dict["parcelwise"][f"{stage}_R2"] = (
-    pearson_corr(y_data.T, pred.T) ** 2
+    res_dict["R2"] = (
+        pearson_corr(y_data.T, pred.T) ** 2 
     ).tolist()
+
+    # export parcelwise scores as .nii images for visualization
+    if data_config.bold_dir is not None:
+        export_images(
+            data_config,
+            res_dict,
+            layer_indx,
+            train_seasons,
+            episode,
+        )
+
+
+def R2(Pred, Real):
+    """Compute coefficient of determination (R^2)."""
+    SSres = np.mean((Real - Pred) ** 2, 0)
+    SStot = np.var(Real, 0)
+    return np.nan_to_num(1 - SSres / SStot)
+
+
+def corr(X, Y, axis=0):
+    """Compute correlation coefficient."""
+    return np.mean(zscore(X) * zscore(Y), axis)
+
+
+def test_ridgeReg_voxelwise(
+    data_config,
+    weights,
+    x_data,
+    y_data,
+    layer_indx,
+    train_season,
+    episode: None,
+) -> None:
+    """.
+
+    Exports RR results in .json file.
+    """
+    res_dict = {}
+    res_dict["correlation"]= {}
+    res_dict["R2"]= {}
+    # Global R2 score
+    print(f"x_data.shape: {x_data.shape}")
+    print(f"y_data.shape: {y_data.shape}")
+
+
+    preds = np.dot(x_data, weights)
+    res_dict["correlation"] = corr(preds, y_data)
+    res_dict["R2"] = R2(preds, y_data)
+    # res_dict["R2"] = (
+    #     pearson_corr(y_data.T, preds.T) ** 2 
+    # ).tolist()
+
 
     Path(f"{data_config.output_dir}").mkdir(parents=True, exist_ok=True)
 
@@ -179,5 +249,4 @@ def test_ridgeReg(
             layer_indx,
             train_season,
             episode,
-            stage
         )

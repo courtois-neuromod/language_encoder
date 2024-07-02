@@ -83,11 +83,22 @@ def split_data_per_training_season(
     #     "r",
     # )
 
-    sub_h5 = h5py.File(
-        f"{data_config.voxelwise_bold_dir}/{data_config.subject_id}/func/"
-        f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_timeseries.h5",
-        "r",
-    )
+
+    if data_config.encoding_level== "parcelwise":
+        bold_dir = data_config.parcelwise_bold_dir
+        sub_h5 = h5py.File(
+        f"{data_config.bold_dir}/{data_config.subject_id}/func/"
+        f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_"
+        f"atlas-{data_config.atlas}_desc-{data_config.parcel}_timeseries.h5",
+        "r")
+    elif data_config.encoding_level== "voxelwise":
+        bold_dir = data_config.voxelwise_bold_dir
+        sub_h5 = h5py.File(
+            f"{bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_timeseries.h5",
+            "r",
+        )
+
     # Season 3 held out for test set
     test_set = []
     for ses in sub_h5:
@@ -218,12 +229,23 @@ def build_target(
     #     f"atlas-{data_config.atlas}_desc-{data_config.parcel}_timeseries.h5",
     #     "r",
     # )
+    
+    if data_config.encoding_level== "parcelwise":
+        bold_dir = data_config.parcelwise_bold_dir
+        sub_h5 = h5py.File(
+        f"{data_config.bold_dir}/{data_config.subject_id}/func/"
+        f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_"
+        f"atlas-{data_config.atlas}_desc-{data_config.parcel}_timeseries.h5",
+        "r")
 
-    sub_h5 = h5py.File(
-        f"{data_config.voxelwise_bold_dir}/{data_config.subject_id}/func/"
-        f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_timeseries.h5",
-        "r",
-    )
+    elif data_config.encoding_level== "voxelwise":
+        bold_dir = data_config.voxelwise_bold_dir
+        sub_h5 = h5py.File(
+            f"{bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_timeseries.h5",
+            "r",
+        )
+
 
     for i, run in enumerate(runs):
         ses = run.split("_")[0]
@@ -246,28 +268,34 @@ def build_target(
 
 def build_val_target(
     data_config,
-    run: list,
+    runs: list,
 ) -> tuple:
     """.
 
-    Concatenates BOLD timeseries into target array.
+    Extract the particiular segment's time series for the validation.
     """
     y_val = []
     length_list = []
-    # sub_h5 = h5py.File(
-    #     f"{data_config.bold_dir}/{data_config.subject_id}/func/"
-    #     f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_"
-    #     f"atlas-{data_config.atlas}_desc-{data_config.parcel}_timeseries.h5",
-    #     "r",
-    # )
 
-    sub_h5 = h5py.File(
-        f"{data_config.voxelwise_bold_dir}/{data_config.subject_id}/func/"
-        f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_timeseries.h5",
-        "r",
-    )
-    ses = run[0].split("_")[0]
-    y_val = np.array(sub_h5[ses][run[0]])
+
+    if data_config.encoding_level== "parcelwise":
+        bold_dir = data_config.parcelwise_bold_dir
+        sub_h5 = h5py.File(
+        f"{data_config.bold_dir}/{data_config.subject_id}/func/"
+        f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_"
+        f"atlas-{data_config.atlas}_desc-{data_config.parcel}_timeseries.h5",
+        "r")
+    elif data_config.encoding_level== "voxelwise":
+        bold_dir = data_config.voxelwise_bold_dir
+        sub_h5 = h5py.File(
+            f"{bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_timeseries.h5",
+            "r",
+        )
+
+    # Since we run validation on segment level, there is no data to concat, but only a single segment
+    ses = runs[0].split("_")[0]
+    y_val = np.array(sub_h5[ses][runs[0]])
     length_list.append(y_val.shape[0])
 
     sub_h5.close()
@@ -463,45 +491,7 @@ def extract_feature_regressor(data_config, embedding_list, runs, run_length):
     return np.concatenate(x_list, axis=0)
 
 
-# def get_season_average_images(data_config, train_seasons, layer_index, data_type):
-
-#     if data_config.subject_id == "sub-04":
-#         val_seasons = ["s01", "s02", "s03", "s04"]
-#         val_seasons.remove(train_seasons[0])
-#         val_seasons.remove(data_config.test_season)
-
-#     else:
-#         val_seasons = ["s01", "s02", "s03", "s04", "s05", "s06"]
-#         val_seasons.remove(train_seasons[0])
-#         val_seasons.remove(data_config.test_season)
-#     for season in val_seasons:
-#         all_epi = []
-#         for x in sorted(
-#             glob.glob(
-#                 f"{data_config.output_dir}/{data_config.subject_id}/{data_config.experiment}/{train_seasons[0]}/*.nii.gz"
-#             )
-#         ):
-
-#             filename = os.path.basename(x)
-#             # # print(f"filename: {filename}")
-#             # data_type_ = filename.split("_")[6]
-#             # # print(data_type_)
-#             season_ = filename.split("_")[1][:3]
-#             print(season_)
-#             layer = filename.split("_")[9][0]
-#             print(layer)
-#             if filename.split("_")[6] == data_type:
-#                 if filename.split("_")[1][:3] == season:
-#                     if filename.split("_")[9][0] == layer_index:
-#                         all_epi.append(x)
-#                         # Compute the mean image
-#                         mean_img = image.mean_img(all_epi)
-#                         print("Saving the mean image")
-#                         mean_img_name= f"{data_config.subject_id}_{season}_mean_R2_{data_type}_layer_{layer_index}.nii.gz"
-#                         mean_img.to_filename(f"{data_config.output_dir}/{data_config.subject_id}/{data_config.experiment}/{train_seasons[0]}/mean_img/{mean_img_name}")
-
-
-def get_season_average_images(data_config, train_seasons, data_type):
+def get_season_average_images(data_config, train_seasons):
 
     if data_config.subject_id == "sub-04":
         val_seasons = ["s01", "s02", "s03", "s04"]
@@ -512,18 +502,21 @@ def get_season_average_images(data_config, train_seasons, data_type):
         val_seasons = ["s01", "s02", "s03", "s04", "s05", "s06"]
         val_seasons.remove(train_seasons[0])
         val_seasons.remove(data_config.test_season)
+    
+    print(val_seasons)
     for season in val_seasons:
         print(f"season: {season}")
 
-        for layer_index in range(1, data_config.target_layer):
+        for layer_index in range(1,13):
             print(f"layer_index: {layer_index}")
             all_epi = []
 
-            pattern = f"{data_config.output_dir}/{data_config.subject_id}/{data_config.experiment}//{train_seasons[0]}/{data_config.subject_id}_*_{data_type}_*_layer_{layer_index}.nii.gz"
-            # print(pattern)
+            # pattern = f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}/{train_seasons[0]}/{data_config.subject_id}_{season}e*_RidgeReg_R2_val_{data_config.base_model_name}_layer_{layer_index}.nii.gz"
+            pattern = f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{train_seasons[0]}/{data_config.subject_id}_{season}e*_RidgeReg_R2_val_{data_config.base_model_name}_layer_{layer_index}.nii.gz"
 
+            print(f"Constructed pattern: {pattern}")
             matching_files = glob.glob(pattern)
-
+            print(f"Matching files: {matching_files}")
             for filename in matching_files:
                 episode_name = os.path.basename(filename).split("_")[
                     1
@@ -538,7 +531,14 @@ def get_season_average_images(data_config, train_seasons, data_type):
             # Append matching files to the all_epi list
             mean_img = image.mean_img(all_epi)
             print("Saving the mean image")
-            mean_img_name = f"{data_config.subject_id}_{season}_mean_R2_{data_type}_layer_{layer_index}.nii.gz"
+            mean_img_name = f"{data_config.subject_id}_{season}_mean_R2_layer_{layer_index}.nii.gz"
             mean_img.to_filename(
-                f"{data_config.output_dir}/{data_config.subject_id}/{data_config.experiment}/{train_seasons[0]}/mean_img/{mean_img_name}"
+                f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{train_seasons[0]}/mean_img/{mean_img_name}"
             )
+
+            #   mean_img.to_filename(
+            #     f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}/{train_seasons[0]}/mean_img/{mean_img_name}"
+            # )
+
+
+

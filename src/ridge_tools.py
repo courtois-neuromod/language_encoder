@@ -98,21 +98,21 @@ def ridge_sk(X, Y, lmbda):
     """Compute ridge regression weights using scikit-learn."""
     rd = Ridge(alpha=lmbda)
     rd.fit(X, Y)
-    return rd.coef_.T, rd.fit(X, Y)
+    return rd.coef_.T
 
 
 def ridgeCV_sk(X, Y, lmbdas):
     """Compute ridge regression weights using scikit-learn with cross-validation."""
     rd = RidgeCV(alphas=lmbdas, solver="svd")
     rd.fit(X, Y)
-    return rd.coef_.T, rd.fit(X, Y)
+    return rd.coef_.T
 
 
 def ridge_by_lambda_sk(X, Y, Xval, Yval, lambdas=np.array([0.1, 1, 10, 100, 1000])):
     """Compute validation errors for ridge regression with different lambda values using scikit-learn."""
     error = np.zeros((lambdas.shape[0], Y.shape[1]))
     for idx, lmbda in enumerate(lambdas):
-        weights, _ = ridge_sk(X, Y, lmbda)
+        weights= ridge_sk(X, Y, lmbda)
         error[idx] = 1 - R2(np.dot(Xval, weights), Yval)
     return error
 
@@ -144,7 +144,7 @@ def cross_val_ridge(
     train_data: np.array,
     groups: list,
     data_config,
-    lambdas=np.array([10**i for i in range(-1, 8)]),
+    lambdas=np.array([10**i for i in range(4, 8)]),
     method="ridge_sk",
     do_plot=False,
     do_zscore=False,
@@ -181,13 +181,17 @@ def cross_val_ridge(
     ]  # solver for the weights
 
     nL = lambdas.shape[0]  # get number of hyperparameter (lambdas) from setting
+    print(f"Creating empty cost matrix!")
+
     r_cv = np.zeros((nL, train_data.shape[1]))  # loss matrix
+    print(f"Estimating the group fold!")
 
     group_kfold = GroupKFold(n_splits=data_config.n_splits)
 
     for icv, (trn, val) in enumerate(
         group_kfold.split(train_features, train_data, groups)
     ):
+        print(f"Ridge training fold: {icv}")
 
         if do_zscore:
             cost = ridge_1(
@@ -205,24 +209,24 @@ def cross_val_ridge(
                 train_data[val],
                 lambdas=lambdas,
             )  # loss of regressor 1
+        print(f"cost is: {cost}")
 
         if do_plot:
             import matplotlib.pyplot as plt
 
             plt.figure()
             plt.imshow(cost, aspect="auto")
-        print("add cost")
+        print("Adding the cost")
         r_cv += cost
-        # print(f"r_cv: {r_cv}")
 
 
     if do_plot:  # show loss
         plt.figure()
         plt.imshow(r_cv, aspect="auto", cmap="RdBu_r")
 
-    print("estimating argmin_lambda")
+    print("Estimating argmin_lambda")
     argmin_lambda = np.argmin(r_cv, axis=0)  # pick the best lambda
-    print(f"argmin_lambda: {argmin_lambda}")
+    print(f"Argmin_lambda: {argmin_lambda}")
 
     weights = np.zeros(
         (train_features.shape[1], train_data.shape[1])
@@ -233,21 +237,30 @@ def cross_val_ridge(
     for idx_lambda in range(
         lambdas.shape[0]
     ):  # this is much faster than iterating over voxels!
+        print(f"lambda value is: {lambdas[idx_lambda]}")
         idx_vox = argmin_lambda == idx_lambda
         print(f"idx_vox: {idx_vox.shape}")
         print(f"idx_vox: {idx_vox}")
 
-        if np.any(idx_vox):
-            print("Some values are True in idx_vox")
-            # Continue with the rest of the operations
-            print(f"train_data[:, idx_vox]: {train_data[:, idx_vox]}")
+        # if np.any(idx_vox):
+        print("Some values are True in idx_vox")
+        # Continue with the rest of the operations
+        print(f"train_data[:, idx_vox]: {train_data[:, idx_vox]}")
 
-            weights[:, idx_vox], model = ridge_2(
-                train_features, train_data[:, idx_vox], lambdas[idx_lambda]
-            )
+            # Debugging print statements
+        weights_to_assign = ridge_2(
+            train_features, train_data[:, idx_vox], lambdas[idx_lambda]
+        )
+        print(f"weights_to_assign shape: {weights_to_assign.shape}")
 
-            print(f"weights: {weights}")
+        print(f"weighs.shape: {weights.shape}")
+        
+
+
+        weights[:, idx_vox] = weights_to_assign
+
+
         picked_lambdas.append(lambdas[idx_lambda])
+        print(f"weighs: {weights}")
 
-
-    return weights, picked_lambdas, model
+    return weights, picked_lambdas

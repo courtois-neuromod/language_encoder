@@ -32,3 +32,5 @@ class DataBaseConfig:
     num_hidden_layers = 12
     friends_seasons = ["s01", "s02", "s03", "s04", "s05", "s06"]
     experiment = "experiment_within/"
+    encoding_level = "voxelwise"
+    alphas=[0.1, 1, 10, 100, 1000, 1e4, 5e4, 1e5, 1e6, 1e7, 1e8]

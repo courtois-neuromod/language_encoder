@@ -18,10 +18,14 @@ class DataBaseConfig:
     voxelwise_bold_dir: str = (
         "/scratch/ibilgin/datasets/friends_voxel_level/friends/Freesurfer_GM_res-func/"
     )
+
+    parcelwise_bold_dir: str = (
+        "/scratch/ibilgin/datasets/friends_voxel_level/friends/Freesurfer_GM_res-func/"
+    )
     stimuli_dir: str = (
         "/scratch/ibilgin/Dropbox/cneuromax/data/friends_language_encoder/stimuli/"
     )
-    output_dir: str = "/scratch/ibilgin/datasets/ridge_regression/voxel_wise"
+    output_dir: str = "/scratch/ibilgin/datasets/ridge_regression/"
     tr_tsv_path: str = (
         "/scratch/ibilgin/Dropbox/cneuromax/data/friends_language_encoder/stimuli/word_alignment/"
     )
@@ -43,3 +47,6 @@ class DataBaseConfig:
     num_hidden_layers = 12
     friends_seasons = ["s01", "s02", "s03", "s04", "s05", "s06"]
     experiment = "experiment_within/"
+    encoding_level = "voxelwise"
+    # encoding_level = "parcelwise"
+    alphas=[0.1, 1, 10, 100, 1000, 1e4, 5e4, 1e5, 1e6, 1e7, 1e8]
