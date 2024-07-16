@@ -1,6 +1,9 @@
 """."""
 
 import numpy as np
+from pathlib import Path
+from nilearn.image import load_img
+from nilearn.maskers import NiftiLabelsMasker, NiftiMasker
 
 # from utils import get_season_average_images
 from encoder import train_ridgeReg, test_ridgeReg_voxelwise, test_ridgeReg_parcelwise
@@ -14,12 +17,26 @@ print(f"Running {data_config.encoding_level} analysis!")
 seasons = ["s01", "s02", "s03", "s04", "s05", "s06"]
 seasons.remove(data_config.test_season)
 print(f"Running encoding for: {data_config.subject_id}")
+
+# atlas_path = Path(
+#     f"{data_config.voxelwise_bold_dir}/{data_config.subject_id}/func/"
+#     f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_mask.nii.gz") 
+# atlas_img = load_img(atlas_path)
+
+# atlas_masker = NiftiMasker(
+# labels_img=atlas_img,
+# standardize=False,
+# )
+
+# atlas_masker.fit()
+
+
 for training_season in seasons[:1]:
 
     print(f"Running training on season: {training_season}")
     train_segment_groups, train_runs, val_runs, test_runs, val_season = split_data_per_training_season(data_config, training_season)
     
-    print(train_runs)
+    print(f"train_runs: {train_runs}")
     print(f"train_segment_groups:{train_segment_groups}")
     print(val_runs)
 
@@ -36,7 +53,7 @@ for training_season in seasons[:1]:
 
     print(f"y_train: {y_train}")
 
-    for layer_indx in range(1, 3): #data_config.target_layer):
+    for layer_indx in range(1, data_config.target_layer):
         print(f"The layer of embedding is: {layer_indx}")
         print("Processing embeddings!")
 

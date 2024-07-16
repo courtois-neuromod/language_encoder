@@ -144,7 +144,7 @@ def cross_val_ridge(
     train_data: np.array,
     groups: list,
     data_config,
-    lambdas=np.array([10**i for i in range(4, 8)]),
+    lambdas=np.array([10**i for i in range(-1, 8)]),
     method="ridge_sk",
     do_plot=False,
     do_zscore=False,
@@ -242,22 +242,21 @@ def cross_val_ridge(
         print(f"idx_vox: {idx_vox.shape}")
         print(f"idx_vox: {idx_vox}")
 
-        # if np.any(idx_vox):
-        print("Some values are True in idx_vox")
-        # Continue with the rest of the operations
-        print(f"train_data[:, idx_vox]: {train_data[:, idx_vox]}")
+        if np.any(idx_vox):
+            print("Some values are True in idx_vox")
+            # Continue with the rest of the operations
+            print(f"train_data[:, idx_vox]: {train_data[:, idx_vox]}")
 
-            # Debugging print statements
-        weights_to_assign = ridge_2(
-            train_features, train_data[:, idx_vox], lambdas[idx_lambda]
-        )
-        print(f"weights_to_assign shape: {weights_to_assign.shape}")
+                # Debugging print statements
+            weights_to_assign = ridge_2(
+                train_features, train_data[:, idx_vox], lambdas[idx_lambda]
+            )
+            print(f"weights_to_assign shape: {weights_to_assign.shape}")
 
-        print(f"weighs.shape: {weights.shape}")
-        
+            print(f"weighs.shape: {weights.shape}")
 
 
-        weights[:, idx_vox] = weights_to_assign
+            weights[:, idx_vox] = weights_to_assign
 
 
         picked_lambdas.append(lambdas[idx_lambda])

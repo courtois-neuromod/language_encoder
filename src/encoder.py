@@ -1,21 +1,42 @@
-import json
 from dataclasses import dataclass
 from pathlib import Path
+import pickle
 
 import nibabel as nib
 import numpy as np
-from nilearn.maskers import NiftiLabelsMasker
+from nilearn.maskers import NiftiLabelsMasker, NiftiMasker
 from scipy.spatial.distance import cosine
 from scipy.stats import pearsonr
 from sklearn.linear_model import RidgeCV
 from sklearn.model_selection import GroupKFold
 from scipy.stats import zscore
-import time
 from numpy.linalg import inv, svd
 from scipy.stats import zscore
 from sklearn.linear_model import Ridge, RidgeCV
 from sklearn.model_selection import KFold
+from nilearn.image import load_img
 
+
+def train_ridgeReg_noCV(
+    X: np.array,
+    y: np.array,
+    alpha: float,
+) -> Ridge:
+    """Trains ridge regression on the given data.
+
+    Args:
+        X: Features
+        y: Bold data
+        alpha: Regularization strength
+
+    Return:
+        Model that is fit with the training data.
+    """
+    # Initialize the Ridge regression model with the specified alpha
+    model = Ridge(alpha=alpha, fit_intercept=True)
+
+    # Fit the model to the data
+    return model.fit(X, y)
 
 def train_ridgeReg(
     X: np.array,
@@ -111,7 +132,9 @@ def export_images(
     results: dict,
     layer_indx: int,
     train_season: str,
-    episode: None,
+    train_window: int,
+    episode,
+    
 ) -> None:
     """.
 
@@ -121,38 +144,43 @@ def export_images(
 
     if data_config.encoding_level == "parcelwise":
         atlas_path = Path(
-            f"{data_config.bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.parcelwise_bold_dir}/{data_config.subject_id}/func/"
             f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_atlas-{data_config.atlas}_"
             f"desc-{data_config.parcel}_dseg.nii.gz",
         )
-    elif data_config.encoding_level == "voxelwise":
-
-        atlas_path = Path(
-            f"{data_config.bold_dir}/{data_config.subject_id}/func/"
-            f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_mask.nii.gz",
-        )
-    atlas_masker = NiftiLabelsMasker(
+        masker = NiftiLabelsMasker(
         labels_img=atlas_path,
         standardize=False,
-    )
-    atlas_masker.fit()
+        )
+        masker.fit()
+    elif data_config.encoding_level == "voxelwise":
+
+        mask_path = Path(
+            f"{data_config.voxelwise_bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_mask.nii.gz") 
+        
+        # atlas_img = load_img(mask_path)
+
+        masker = NiftiMasker(mask_img=mask_path, standardize=False)
+  
+        masker.fit()
 
     # map Pearson correlations onto brain parcels
 
-    nii_file = atlas_masker.inverse_transform(
+    nii_file = masker.inverse_transform(
         np.array(results["R2"]),
     )
     if episode == None:
 
         nib.save(
             nii_file,
-            f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}//{train_season}/{data_config.subject_id}_RidgeReg_R2_train_{data_config.base_model_name}_layer_{layer_indx}.nii.gz",
+            f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}//{train_season}/{data_config.subject_id}_RidgeReg_R2_train_{data_config.base_model_name}_layer_{layer_indx}_window_{train_window}.nii.gz",
         )
 
     else:
         nib.save(
             nii_file,
-            f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}//{train_season}/{data_config.subject_id}_{episode}_RidgeReg_R2_val_{data_config.base_model_name}_layer_{layer_indx}.nii.gz",
+            f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}//{train_season}/{data_config.subject_id}_{episode}_RidgeReg_R2_val_{data_config.base_model_name}_layer_{layer_indx}_window_{train_window}.nii.gz",
         )
 
     return
@@ -165,6 +193,7 @@ def test_ridgeReg_parcelwise(
     y_data,
     layer_indx,
     train_seasons,
+    train_window,
     episode=None,
 ) -> None:
     """.
@@ -183,14 +212,15 @@ def test_ridgeReg_parcelwise(
     res_dict["R2"] = (pearson_corr(y_data.T, pred.T) ** 2).tolist()
 
     # export parcelwise scores as .nii images for visualization
-    if data_config.bold_dir is not None:
-        export_images(
-            data_config,
-            res_dict,
-            layer_indx,
-            train_seasons,
-            episode,
-        )
+
+    export_images(
+        data_config,
+        res_dict,
+        layer_indx,
+        train_seasons,
+        train_window,
+        episode,
+    )
 
 
 def R2(Pred, Real):
@@ -235,11 +265,10 @@ def test_ridgeReg_voxelwise(
     Path(f"{data_config.output_dir}").mkdir(parents=True, exist_ok=True)
 
     # export parcelwise scores as .nii images for visualization
-    if data_config.bold_dir is not None:
-        export_images(
-            data_config,
-            res_dict,
-            layer_indx,
-            train_season,
-            episode,
-        )
+    export_images(
+        data_config,
+        res_dict,
+        layer_indx,
+        train_season,
+        episode,
+    )

@@ -3,7 +3,8 @@
 import glob
 import os
 from pathlib import Path
-
+import random
+import os
 import h5py
 import numpy as np
 import pandas as pd
@@ -13,6 +14,13 @@ from nilearn import image
 from nilearn.glm.first_level import compute_regressor
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
+from sklearn.linear_model import Ridge
+from encoder import (
+    test_ridgeReg_parcelwise,
+    train_ridgeReg_noCV,
+    pearson_corr
+)
+from sklearn.metrics import r2_score, mean_squared_error
 
 
 def list_seasons(
@@ -64,6 +72,111 @@ def generate_one_hot_vector(gentle):
     regressor_vector = np.stack([onsets, duration, word])
     return regressor_vector
 
+def pick_random_datasets(data_list_1, data_list_2):
+    train_data_1 = random.choice(data_list_1)
+    train_data_2 = random.sample(data_list_1, 3)
+    train_data = train_data_1 + train_data_2 
+    val_data = data_list_1.remove(train_data_1) + data_list_2.remove(train_data_2) 
+    
+    if "figures" in train_data:
+        val_data = val_data+ ["figures2"]
+
+    if "life" in train_data:
+        val_data = val_data+ ["life2"]
+
+
+    return train_data, val_data
+
+
+
+
+def split_within_dataset_friends(
+    data_config,
+    within_data,
+) -> tuple:
+    """Split a friend season into %80 training and
+    randomly picked %10 val, and %10 test data.
+    """
+
+    if data_config.encoding_level == "parcelwise":
+        sub_h5 = h5py.File(
+            f"{data_config.parcelwise_bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_"
+            f"atlas-{data_config.atlas}_desc-{data_config.parcel}_timeseries.h5",
+            "r",
+        )
+    elif data_config.encoding_level == "voxelwise":
+        sub_h5 = h5py.File(
+            f"{data_config.voxelwise_bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_timeseries.h5",
+            "r",
+        )
+
+    test_season = []
+    for ses in sub_h5:
+        test_season += [
+            x for x in sub_h5[ses] if x.split("-")[-1][:3] == data_config.test_season
+        ]
+
+    within_data_list = [within_data]  # eg. season 1
+    within_data_set = []
+    for ses in sub_h5:
+        for x in sub_h5[ses]:
+            if x.split("-")[-1][:3] in within_data_list:
+                within_data_set.append(x)
+
+    # print(within_data_set)
+
+    # Assign consecutive data episodes to cross-validation groups and split one of them as the test set
+    data_size = len(within_data_set)
+    train_size = int(0.8 * data_size)
+    val_size = int(0.1 * data_size)
+    test_size = int(0.1 * data_size)  # Ensure all data is used
+
+    indices = list(range(data_size))
+
+    # Randomly select indices for validation and test sets
+    val_indices = random.sample(indices, val_size)
+    test_indices = random.sample(
+        [i for i in indices if i not in val_indices], test_size
+    )
+
+    # Use the remaining indices for the training set
+    train_indices = [
+        i for i in indices if i not in val_indices and i not in test_indices
+    ]
+
+    # Split the data based on the indices
+    train_data = [within_data_set[i] for i in train_indices]
+    val_data = [within_data_set[i] for i in val_indices]
+    test_data = [within_data_set[i] for i in test_indices]
+
+    sub_h5.close()
+    return train_data, val_data, test_data, test_season
+
+
+def sliding_windows(data_config, data):
+    """Generate sliding windows of 1 hour training data
+    for within dataset training."""
+
+    # Generate the sliding windows
+    windowed_data = [
+        data[i : i + data_config.window_size]
+        for i in range(len(data) - data_config.window_size + 1)
+    ]
+
+    print(windowed_data)
+    return windowed_data
+
+
+def discrete_windows(data_config, data):
+    """Generate the consecutive windows."""
+    consecutive_windows = [
+        data[i : i + data_config.window_size]
+        for i in range(0, len(data), data_config.window_size)
+    ]
+    return consecutive_windows
+
 
 def split_data_per_training_season(
     data_config,
@@ -83,18 +196,16 @@ def split_data_per_training_season(
     #     "r",
     # )
 
-
-    if data_config.encoding_level== "parcelwise":
-        bold_dir = data_config.parcelwise_bold_dir
+    if data_config.encoding_level == "parcelwise":
         sub_h5 = h5py.File(
-        f"{data_config.bold_dir}/{data_config.subject_id}/func/"
-        f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_"
-        f"atlas-{data_config.atlas}_desc-{data_config.parcel}_timeseries.h5",
-        "r")
-    elif data_config.encoding_level== "voxelwise":
-        bold_dir = data_config.voxelwise_bold_dir
+            f"{data_config.parcelwise_bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_"
+            f"atlas-{data_config.atlas}_desc-{data_config.parcel}_timeseries.h5",
+            "r",
+        )
+    elif data_config.encoding_level == "voxelwise":
         sub_h5 = h5py.File(
-            f"{bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.voxelwise_bold_dir}/{data_config.subject_id}/func/"
             f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_timeseries.h5",
             "r",
         )
@@ -118,7 +229,6 @@ def split_data_per_training_season(
         val_seasons.remove(data_config.test_season)
         # print(f"val_seasons: {val_seasons}")
 
-
     val_set = []
     for ses in sub_h5:
         for val_season in val_seasons:
@@ -126,17 +236,14 @@ def split_data_per_training_season(
 
     # print(f"val_set: {val_set}")
 
-
     train_set = []
     for ses in sub_h5:
         for x in sub_h5[ses]:
             if x.split("-")[-1][:3] in training_list:
                 train_set.append(x)
 
-
     train_set = sorted(train_set)
     # print(f"train_set: {train_set}")
-
 
     # print(f"train_set: {len(train_set)}")
     sub_h5.close()
@@ -210,6 +317,48 @@ def split_data_randomly(
 
     return train_groups, train_set, val_set, test_set, val_season
 
+def build_within_target(
+    data_config,
+    runs: list,
+) -> tuple:
+    """.
+
+    Concatenates BOLD timeseries into target arrayn for given list of runs.
+    """
+    y_list = []
+    length_list = []
+
+    if data_config.encoding_level == "parcelwise":
+        sub_h5 = h5py.File(
+            f"{data_config.parcelwise_bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_"
+            f"atlas-{data_config.atlas}_desc-{data_config.parcel}_timeseries.h5",
+            "r",
+        )
+
+    elif data_config.encoding_level == "voxelwise":
+        sub_h5 = h5py.File(
+            f"{data_config.voxelwise_bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_timeseries.h5",
+            "r",
+        )
+
+    for i, run in enumerate(runs):
+        ses = run.split("_")[0]
+        run_ts = np.array(sub_h5[ses][run])
+        length_list.append(run_ts.shape[0])
+        y_list.append(run_ts)
+
+    sub_h5.close()
+
+    y_list = np.concatenate(y_list, axis=0)
+
+    print("y_list shape:", y_list.shape)
+    print("length_list:", length_list)
+
+    return y_list, length_list
+
+
 
 def build_target(
     data_config,
@@ -229,23 +378,21 @@ def build_target(
     #     f"atlas-{data_config.atlas}_desc-{data_config.parcel}_timeseries.h5",
     #     "r",
     # )
-    
-    if data_config.encoding_level== "parcelwise":
-        bold_dir = data_config.parcelwise_bold_dir
-        sub_h5 = h5py.File(
-        f"{data_config.bold_dir}/{data_config.subject_id}/func/"
-        f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_"
-        f"atlas-{data_config.atlas}_desc-{data_config.parcel}_timeseries.h5",
-        "r")
 
-    elif data_config.encoding_level== "voxelwise":
-        bold_dir = data_config.voxelwise_bold_dir
+    if data_config.encoding_level == "parcelwise":
         sub_h5 = h5py.File(
-            f"{bold_dir}/{data_config.subject_id}/func/"
-            f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_timeseries.h5",
+            f"{data_config.parcelwise_bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_"
+            f"atlas-{data_config.atlas}_desc-{data_config.parcel}_timeseries.h5",
             "r",
         )
 
+    elif data_config.encoding_level == "voxelwise":
+        sub_h5 = h5py.File(
+            f"{data_config.voxelwise_bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_timeseries.h5",
+            "r",
+        )
 
     for i, run in enumerate(runs):
         ses = run.split("_")[0]
@@ -277,18 +424,16 @@ def build_val_target(
     y_val = []
     length_list = []
 
-
-    if data_config.encoding_level== "parcelwise":
-        bold_dir = data_config.parcelwise_bold_dir
+    if data_config.encoding_level == "parcelwise":
         sub_h5 = h5py.File(
-        f"{data_config.bold_dir}/{data_config.subject_id}/func/"
-        f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_"
-        f"atlas-{data_config.atlas}_desc-{data_config.parcel}_timeseries.h5",
-        "r")
-    elif data_config.encoding_level== "voxelwise":
-        bold_dir = data_config.voxelwise_bold_dir
+            f"{data_config.parcelwise_bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_"
+            f"atlas-{data_config.atlas}_desc-{data_config.parcel}_timeseries.h5",
+            "r",
+        )
+    elif data_config.encoding_level == "voxelwise":
         sub_h5 = h5py.File(
-            f"{bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.voxelwise_bold_dir}/{data_config.subject_id}/func/"
             f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_timeseries.h5",
             "r",
         )
@@ -502,17 +647,16 @@ def get_season_average_images(data_config, train_seasons):
         val_seasons = ["s01", "s02", "s03", "s04", "s05", "s06"]
         val_seasons.remove(train_seasons[0])
         val_seasons.remove(data_config.test_season)
-    
+
     print(val_seasons)
     for season in val_seasons:
         print(f"season: {season}")
 
-        for layer_index in range(1,13):
+        for layer_index in range(1, 2):  # 13):
             print(f"layer_index: {layer_index}")
             all_epi = []
 
-            # pattern = f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}/{train_seasons[0]}/{data_config.subject_id}_{season}e*_RidgeReg_R2_val_{data_config.base_model_name}_layer_{layer_index}.nii.gz"
-            pattern = f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{train_seasons[0]}/{data_config.subject_id}_{season}e*_RidgeReg_R2_val_{data_config.base_model_name}_layer_{layer_index}.nii.gz"
+            pattern = f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}/{train_seasons[0]}/{data_config.subject_id}_{season}e*_RidgeReg_R2_val_{data_config.base_model_name}_layer_{layer_index}.nii.gz"
 
             print(f"Constructed pattern: {pattern}")
             matching_files = glob.glob(pattern)
@@ -531,14 +675,107 @@ def get_season_average_images(data_config, train_seasons):
             # Append matching files to the all_epi list
             mean_img = image.mean_img(all_epi)
             print("Saving the mean image")
-            mean_img_name = f"{data_config.subject_id}_{season}_mean_R2_layer_{layer_index}.nii.gz"
-            mean_img.to_filename(
-                f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{train_seasons[0]}/mean_img/{mean_img_name}"
+            mean_img_name = (
+                f"{data_config.subject_id}_{season}_mean_R2_layer_{layer_index}.nii.gz"
             )
 
-            #   mean_img.to_filename(
-            #     f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}/{train_seasons[0]}/mean_img/{mean_img_name}"
-            # )
+            mean_img.to_filename(
+                f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}/{train_seasons[0]}/mean_img/{mean_img_name}"
+            )
+
+def find_best_alpha(data_config, windowed_data, val_runs):
+    best_alpha = None
+
+    # Randomly select 3 windows from the training data once
+    selected_windows = random.sample(windowed_data, 3)
+
+    # Initialize dictionary to store validation MSE for each alpha
+    alpha_performance = {alpha: [] for alpha in data_config.alphas}
+
+    # Iterate over each alpha value
+    for alpha in tqdm(data_config.alphas, desc="Fitting Ridge models"):
+        print(f"Running the ridge on alpha: {alpha}")
+
+        # Iterate over each selected window
+        for window in range(len(selected_windows)):
+            print(f"Running the ridge training on window: {window + 1}")
+            train_runs = selected_windows[window]
+
+            # Build training targets
+            y_train, length_train = build_within_target(data_config, train_runs)
+            train_embeddings, scaler = process_embeddings(data_config, train_runs, data_config.embedding_layer)
+            x_train = extract_feature_regressor(data_config, train_embeddings, train_runs, length_train)
+
+            print(f"x_train.shape: {x_train.shape}")
+
+            # Train Ridge model
+            model = train_ridgeReg_noCV(x_train, y_train, alpha=alpha)
+
+            # Compute validation MSE for each validation run
+            for val_run in val_runs:
+                parts = val_run.split("_")
+                task = parts[1].split("_")
+                episode_name = task[0].split("_")
+                episode = episode_name[0].split("_")[-1].split(".")[0][5:15]
+                season = episode_name[0].split("_")[-1].split(".")[0][5:8]
+                print(f"Processed validation run for training on {season}: {episode} ")
+
+                val_run_list = [val_run]
+                y_val, length_val = build_val_target(data_config, val_run_list)
+                val_embeddings, _ = process_embeddings(data_config, val_run_list, data_config.embedding_layer, scaler)
+                x_val = extract_feature_regressor(data_config, val_embeddings, val_run_list, length_val)
+
+                # Predict on validation set and compute MSE
+                val_preds = model.predict(x_val)
+                val_mse = mean_squared_error(y_val, val_preds)
+                print(f"val_mse for {alpha} is {val_mse} for training window {window} of val {val_run}")
+                alpha_performance[alpha].append(val_mse)
+
+    # Compute the mean validation MSE for each alpha
+    mean_alpha_performance = {alpha: np.mean(mse_list) for alpha, mse_list in alpha_performance.items()}
+
+    # Find the alpha with the lowest mean validation MSE
+    best_alpha = min(mean_alpha_performance, key=mean_alpha_performance.get)
+    print(f"The best alpha is: {best_alpha} with mean validation MSE: {mean_alpha_performance[best_alpha]}")
+
+    return best_alpha
 
 
+def create_folder(path):
+    # Check if the folder exists
+    if not os.path.exists(path):
+        # Create the folder
+        os.makedirs(path)
+        print(f"Folder '{path}' created.")
+    else:
+        print(f"Folder '{path}' already exists.")
+        
 
+def get_within_ridge_average(data_config, train_seasons):
+
+    all_epi = []
+
+    folder_to_save= f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}/{train_seasons[0]}/mean_img"
+    
+    create_folder(folder_to_save)
+
+    pattern = f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}/{train_seasons[0]}/*_val_*_layer_{data_config.embedding_layer}_*.nii.gz"
+
+    print(f"Constructed pattern: {pattern}")
+    matching_files = glob.glob(pattern)
+    print(f"Matching files: {matching_files}")
+    for filename in matching_files:
+        all_epi.append(filename)  # Append filename to all_epi if it matches
+
+    # print(all_epi)
+
+    # Append matching files to the all_epi list
+    mean_img = image.mean_img(all_epi)
+    print("Saving the mean image")
+    mean_img_name = (
+        f"{data_config.subject_id}_{train_seasons[0]}_mean_R2_layer_{data_config.embedding_layer}.nii.gz"
+    )
+
+    mean_img.to_filename(f"{folder_to_save}/{mean_img_name}")
+
+    
