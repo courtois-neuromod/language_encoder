@@ -2,7 +2,7 @@
 
 # from utils import get_season_average_images
 from encoder import (
-    test_ridgeReg_parcelwise,
+    test_within_ridgeReg_parcelwise,
     train_ridgeReg_noCV,
 )
 from encoder_dataclass import DataBaseConfig
@@ -10,11 +10,13 @@ from utils import (
     build_val_target,
     extract_feature_regressor,
     process_embeddings,
-    split_within_dataset_friends,
+    split_within_dataset,
     build_within_target,
     discrete_windows,
-    find_best_alpha,
+    find_best_alpha_within_data,
 )
+
+import numpy as np
 
 import time
 
@@ -40,14 +42,14 @@ else:
 for season in seasons:
 
     print(f"Running training and testing for {data_config.subject_id} on season: {season}")
-    train_runs, val_runs, test_runs, test_data = split_within_dataset_friends(
+    train_runs, val_runs, test_runs, test_data = split_within_dataset(
         data_config, season
     )
     windowed_data = discrete_windows(data_config, train_runs)
     
    
     # Example usage
-    best_alpha = find_best_alpha(data_config, windowed_data, val_runs)
+    best_alpha = find_best_alpha_within_data(data_config, windowed_data, val_runs)
     print(f"The best alpha is: {best_alpha}")
 
 
@@ -70,9 +72,12 @@ for season in seasons:
         print(f"The layer of embedding is: {data_config.embedding_layer}")
         print("Processing embeddings!")
 
-        train_embeddings, scaler = process_embeddings(
+        train_embeddings_, scaler = process_embeddings(
             data_config, train_runs, data_config.embedding_layer
         )
+        
+        train_embeddings = np.concatenate(train_embeddings_, axis=0)
+
 
         print("Extract feature regressors!")
         x_train = extract_feature_regressor(
@@ -91,7 +96,7 @@ for season in seasons:
             )
 
             print("Estimating the training prediction!")
-            test_ridgeReg_parcelwise(
+            test_within_ridgeReg_parcelwise(
                 data_config,
                 model,
                 x_train,
@@ -114,13 +119,16 @@ for season in seasons:
             print(f"Processed validation run for training on {season}: {episode} ")
 
             val_run_list = [val_run]
-            y_val, length_val = build_val_target(data_config, val_run_list)
+            y_val, length_val = build_val_target(data_config, val_run_list, "friends")
 
             # print(f"Processing the layer {layer_indx}")
 
-            val_embeddings, _ = process_embeddings(
+            val_embeddings_, _ = process_embeddings(
                 data_config, val_run_list, data_config.embedding_layer, scaler
             )
+
+            val_embeddings = np.concatenate(val_embeddings_, axis=0)
+
 
             x_val = extract_feature_regressor(
                 data_config, val_embeddings, val_run_list, length_val
@@ -129,7 +137,7 @@ for season in seasons:
             print("Estimating the validation prediction!")
 
             if data_config.encoding_level == "parcelwise":
-                test_ridgeReg_parcelwise(
+                test_within_ridgeReg_parcelwise(
                     data_config,
                     model,
                     x_val,

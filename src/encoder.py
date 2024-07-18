@@ -127,7 +127,7 @@ def pearson_corr(
     return np.array(r_vals)
 
 
-def export_images(
+def export_images_within(
     data_config,
     results: dict,
     layer_indx: int,
@@ -186,7 +186,7 @@ def export_images(
     return
 
 
-def test_ridgeReg_parcelwise(
+def test_within_ridgeReg_parcelwise(
     data_config,
     R,
     x_data,
@@ -213,7 +213,7 @@ def test_ridgeReg_parcelwise(
 
     # export parcelwise scores as .nii images for visualization
 
-    export_images(
+    export_images_within(
         data_config,
         res_dict,
         layer_indx,
@@ -221,6 +221,112 @@ def test_ridgeReg_parcelwise(
         train_window,
         episode,
     )
+
+
+
+def export_images(
+    data_config,
+    results: dict,
+    layer_indx: int,
+    train_season: str,
+    dataset_name:str,
+    segment,
+    
+) -> None:
+    """.
+
+    Exports RR parcelwise scores as nifti files with
+    subject-specific atlas used to extract timeseries.
+    """
+
+    if data_config.encoding_level == "parcelwise":
+        if dataset_name=="friends":
+            atlas_path = Path(
+            f"{data_config.parcelwise_bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_atlas-{data_config.atlas}_"
+            f"desc-{data_config.parcel}_dseg.nii.gz",
+        )
+        else: 
+            atlas_path = Path(
+            f"{data_config.parcelwise_bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-movie10_space-MNI152NLin2009cAsym_atlas-{data_config.atlas}_"
+            f"desc-{data_config.parcel}_dseg.nii.gz")
+       
+       
+        masker = NiftiLabelsMasker(
+        labels_img=atlas_path,
+        standardize=False,
+        )
+        masker.fit()
+    elif data_config.encoding_level == "voxelwise":
+
+        mask_path = Path(
+            f"{data_config.voxelwise_bold_dir}/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-friends_space-T1w_atlas-Freesurfer_label-GM_res-func_mask.nii.gz") 
+        
+        # atlas_img = load_img(mask_path)
+
+        masker = NiftiMasker(mask_img=mask_path, standardize=False)
+  
+        masker.fit()
+
+    # map Pearson correlations onto brain parcels
+
+    nii_file = masker.inverse_transform(
+        np.array(results["R2"]),
+    )
+    if segment == None:
+
+        nib.save(
+            nii_file,
+            f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}//{train_season}/{data_config.subject_id}_RidgeReg_R2_train_{data_config.base_model_name}_layer_{layer_indx}.nii.gz",
+        )
+
+    else:
+        nib.save(
+            nii_file,
+            f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}//{train_season}/{data_config.subject_id}_{segment}_RidgeReg_R2_val_{data_config.base_model_name}_layer_{layer_indx}.nii.gz",
+        )
+
+    return
+
+
+def test_ridgeReg_parcelwise(
+    data_config,
+    R,
+    x_data,
+    y_data,
+    layer_indx,
+    train_seasons,
+    dataset_name,
+    segment=None,
+) -> None:
+    """.
+
+    Exports RR results in .json file.
+    """
+    res_dict = {}
+    res_dict["correlation"] = {}
+    res_dict["R2"] = {}
+
+    # Global R2 score
+    res_dict["correlation"] = R.score(x_data, y_data)
+
+    # Parcel-wise predictions
+    pred = R.predict(x_data)
+    res_dict["R2"] = (pearson_corr(y_data.T, pred.T) ** 2).tolist()
+
+    # export parcelwise scores as .nii images for visualization
+
+    export_images(
+        data_config,
+        res_dict,
+        layer_indx,
+        train_seasons,
+        dataset_name,
+        segment,
+    )
+
 
 
 def R2(Pred, Real):
@@ -242,6 +348,7 @@ def test_ridgeReg_voxelwise(
     y_data,
     layer_indx,
     train_season,
+    dataset_name,
     episode: None,
 ) -> None:
     """.
@@ -270,5 +377,6 @@ def test_ridgeReg_voxelwise(
         res_dict,
         layer_indx,
         train_season,
+        dataset_name,
         episode,
     )

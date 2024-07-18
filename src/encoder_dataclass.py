@@ -14,7 +14,9 @@ class DataBaseConfig:
     test_season = "s03"  # season allocated for test
     TR: float = 1.49
     experiment = "within_dataset"
-    parcelwise_bold_dir: str = "/scratch/ibilgin/datasets/friends/parcelwise/friends.timeseries/"
+    parcelwise_bold_dir: str = "/scratch/ibilgin/datasets/"
+    
+    
     voxelwise_bold_dir: str = (
         "/scratch/ibilgin/datasets/friends/voxelwise/"
     )
