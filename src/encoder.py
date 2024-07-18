@@ -231,6 +231,7 @@ def export_images(
     train_season: str,
     dataset_name:str,
     segment,
+    set,
     
 ) -> None:
     """.
@@ -242,14 +243,14 @@ def export_images(
     if data_config.encoding_level == "parcelwise":
         if dataset_name=="friends":
             atlas_path = Path(
-            f"{data_config.parcelwise_bold_dir}/{data_config.subject_id}/func/"
-            f"{data_config.subject_id}_task-friends_space-MNI152NLin2009cAsym_atlas-{data_config.atlas}_"
+            f"{data_config.parcelwise_bold_dir}/{dataset_name}/parcelwise/{dataset_name}.timeseries/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-{dataset_name}_space-MNI152NLin2009cAsym_atlas-{data_config.atlas}_"
             f"desc-{data_config.parcel}_dseg.nii.gz",
         )
         else: 
             atlas_path = Path(
-            f"{data_config.parcelwise_bold_dir}/{data_config.subject_id}/func/"
-            f"{data_config.subject_id}_task-movie10_space-MNI152NLin2009cAsym_atlas-{data_config.atlas}_"
+            f"{data_config.parcelwise_bold_dir}/{dataset_name}/parcelwise/{dataset_name}.timeseries/{data_config.subject_id}/func/"
+            f"{data_config.subject_id}_task-{dataset_name}_space-MNI152NLin2009cAsym_atlas-{data_config.atlas}_"
             f"desc-{data_config.parcel}_dseg.nii.gz")
        
        
@@ -285,7 +286,7 @@ def export_images(
     else:
         nib.save(
             nii_file,
-            f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}//{train_season}/{data_config.subject_id}_{segment}_RidgeReg_R2_val_{data_config.base_model_name}_layer_{layer_indx}.nii.gz",
+            f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}//{set}/{train_season}/{data_config.subject_id}_{segment}_RidgeReg_R2_val_{data_config.base_model_name}_layer_{layer_indx}.nii.gz",
         )
 
     return
@@ -296,6 +297,7 @@ def test_ridgeReg_parcelwise(
     R,
     x_data,
     y_data,
+    set,
     layer_indx,
     train_seasons,
     dataset_name,
@@ -325,6 +327,7 @@ def test_ridgeReg_parcelwise(
         train_seasons,
         dataset_name,
         segment,
+        set,
     )
 
 

@@ -8,10 +8,10 @@ class DataBaseConfig:
     target_layer: int = 13
     atlas: str = "MIST"
     parcel: str = "444"
-    subject_id: str = "sub-06"
+    subject_id: str = "sub-03"
     n_splits: int = 10
     random_state: int = 42
-    test_season = "s03"  # season allocated for test
+    test_season = "s03"  # season alloc ated for test
     TR: float = 1.49
     experiment = "within_dataset"
     parcelwise_bold_dir: str = "/scratch/ibilgin/datasets/"
@@ -44,7 +44,7 @@ class DataBaseConfig:
     feature_count = 768
     num_hidden_layers = 12
     friends_seasons = ["s01", "s02", "s03", "s04", "s05", "s06"]
-    experiment = "experiment_within/"
+    experiment = "experiment_across"
     
     # encoding_level = "voxelwise"
     encoding_level = "parcelwise"

@@ -120,8 +120,10 @@ def pick_random_movie_datasets(data_list):
 
 
 
+
 def split_across_dataset(
     data_config,
+    set, 
     training_season,
     friends,
     movie10,
@@ -130,7 +132,21 @@ def split_across_dataset(
     randomly picked %10 val, and %10 test data.
     """
     val_friends_data = friends
-    train_movie10_data_list, val_movie10_data_list = pick_random_movie_datasets(movie10)
+    # train_movie10_data_list, val_movie10_data_list = pick_random_movie_datasets(movie10)
+
+    if set == "wolf":
+        
+        train_movie10_data_list = ["figures", "life", "wolf"]
+        val_movie10_data_list = ["figures2", "life2", "bourne"]
+
+    elif set == "bourne":
+
+        train_movie10_data_list = ["figures", "life","bourne"]
+        val_movie10_data_list = ["figures2", "life2","wolf"]
+
+
+
+
     val_friends_data.remove(training_season)
     print(f"val_movie10_data_list: {val_movie10_data_list}")
 
@@ -169,14 +185,6 @@ def split_across_dataset(
             if x.split("-")[-1][:3] in val_friends_data:
                 val_friends_set.append(x)
 
-
-    # item = "ses-011_task-figures01_run-2_timeseries"
-    # parts = item.split('_')
-
-    # print(''.join([char for char in parts[1].split('-')[1] if not char.isdigit()]))
-
-    # # Extract the 'run-2' part from the third component
-    # print(parts[2])
 
     train_movie10_set = []
     val_movie10_set = []
@@ -882,12 +890,10 @@ def get_hrf_convolved_embeddings_accross_dataset(data_config, train_friends_set,
     train_friends_embeddings, _, friends_lengths = process_embeddings(
             data_config,"friends", train_friends_set, data_config.embedding_layer)
     
-    print(f"train_friends_embeddings:{len(train_friends_embeddings)}")
     sum_length = 0
     for i in train_friends_embeddings:
         sum_length += len(i)
 
-    print(f"train_friends_embeddings length:{sum_length}")
 
     # Extract and concatenate movie embeddings
     train_movie_embeddings, _ , movie10_lengths= process_embeddings(
@@ -898,21 +904,6 @@ def get_hrf_convolved_embeddings_accross_dataset(data_config, train_friends_set,
     for i in train_movie_embeddings:
         sum_length += len(i)
 
-    print(f"train_movie_embeddings length:{sum_length}")
-    print(f"train_movie_embeddings:{len(train_movie_embeddings)}")
-
-
-    # all_embeddings.append(train_movie_embeddings)
-
-    # flattened_embeddings = [item for sublist in all_embeddings for item in sublist]
-
-    # # Concatenate all embeddings along the word dimension (axis 0)
-    # train_embeddings = np.concatenate(flattened_embeddings, axis=0)
-
-    # print(f"train_friends_embeddings shape: {train_movie_embeddings.shape}")
-
-
-    print("Extract feature regressors!")
     x_train_friends_convolved = extract_feature_regressor(
         data_config, "friends", train_friends_embeddings, train_friends_set, length_train[0]
     )
@@ -921,27 +912,19 @@ def get_hrf_convolved_embeddings_accross_dataset(data_config, train_friends_set,
     for i in x_train_friends_convolved:
         sum_length += len(i)
 
-    print(f"train_friends_embeddings convolved length:{sum_length}")
-
-    print(f"x_train_friends_convolved:{len(x_train_friends_convolved)}")
-
-
 
     x_train_movie10_convolved = extract_feature_regressor(
         data_config, "movie10", train_movie_embeddings, train_movie10_set, length_train[1]
     )
-    print(f"movie10 convolved embeddings: {len(x_train_movie10_convolved)}")
 
     
     sum_length = 0
     for i in x_train_movie10_convolved:
         sum_length += len(i)
 
-    print(f"train_movie_embeddings convolved length:{sum_length}")
 
     all_convolved_embeddings = [x_train_friends_convolved, x_train_movie10_convolved]
     flattened_convolved_embeddings = [item for sublist in all_convolved_embeddings for item in sublist]
-    print(f"flattened_convolved_embeddings:{len(flattened_convolved_embeddings)}")
 
 
     x_train = np.concatenate(flattened_convolved_embeddings, axis=0)
@@ -997,8 +980,6 @@ def get_data_filename_average_images(data_config, train_data_filenames):
             )
 
 def find_best_alpha_within_data(data_config, windowed_data, val_runs):
-    best_alpha = None
-
     # Randomly select 3 windows from the training data once
     selected_windows = random.sample(windowed_data, 3)
 
@@ -1016,8 +997,8 @@ def find_best_alpha_within_data(data_config, windowed_data, val_runs):
 
             # Build training targets
             y_train, length_train = build_within_target(data_config, train_runs)
-            train_embeddings, scaler, lengths = process_embeddings(data_config, train_runs, data_config.embedding_layer)
-            x_train_ = extract_feature_regressor(data_config, train_embeddings, train_runs, length_train)
+            train_embeddings, scaler, _ = process_embeddings(data_config, "friends", train_runs, data_config.embedding_layer)
+            x_train_ = extract_feature_regressor(data_config, "friends", train_embeddings, train_runs, length_train)
             x_train = np.concatenate(x_train_, axis=0)
 
             print(f"x_train.shape: {x_train.shape}")
@@ -1036,8 +1017,8 @@ def find_best_alpha_within_data(data_config, windowed_data, val_runs):
 
                 val_run_list = [val_run]
                 y_val, length_val = build_val_target(data_config, val_run_list, "friends")
-                val_embeddings, _, _= process_embeddings(data_config, val_run_list, data_config.embedding_layer, scaler)
-                x_val_ = extract_feature_regressor(data_config, val_embeddings, val_run_list, length_val)
+                val_embeddings, _, _= process_embeddings(data_config,"friends",  val_run_list, data_config.embedding_layer)
+                x_val_ = extract_feature_regressor(data_config, "friends", val_embeddings, val_run_list, length_val)
                 x_val = np.concatenate(x_val_, axis=0)
 
 
@@ -1065,18 +1046,7 @@ def find_best_alpha_across_data(data_config, training_season, train_friends_set,
     # Randomly select one training movie datasets to train ridge alongside the training season of Friends
     movie_train_name = random.sample(train_movie10_data_list, 1)
 
-    train_movie_set = []
     train_movie_set = [run for run in train_movie10_set if ''.join([char for char in run.split("_")[1].split('-')[1] if not char.isdigit()]) == movie_train_name]
-
-    
-    for run in train_movie10_set:
-        parts = run.split("_")
-        data_filename = ''.join([char for char in parts[1].split('-')[1] if not char.isdigit()])
-        # segment = parts[1].split('-')[1]
-        if data_filename == movie_train_name[0]:
-            train_movie_set.append(run)
-    
-    print(f"train_movie_set:{train_movie_set}")
 
 
     y_train, length_train = build_across_target(
@@ -1084,8 +1054,6 @@ def find_best_alpha_across_data(data_config, training_season, train_friends_set,
         train_friends_set,
         train_movie_set,
     )
-
-   
 
     x_train = get_hrf_convolved_embeddings_accross_dataset(data_config, train_friends_set, train_movie_set, length_train)
 
@@ -1096,26 +1064,14 @@ def find_best_alpha_across_data(data_config, training_season, train_friends_set,
     # Select random validation data across both set
 
     # Friends
-    if data_config.subject_id == "sub-04":
-        friends_val_season = ["s01", "s02", "s04"]
-        friends_val_season.remove(training_season)
-    else:
-        friends_val_season = ["s01", "s02", "s04", "s05", "s06"]    
-        friends_val_season.remove(training_season)        
-    friends_val_dataset = random.sample(friends_val_season, 1)
-    val_friends_set_alpha = []
-    val_friends_set_alpha += [
-            x for x in val_friends_set if x.split("-")[-1][:3] == friends_val_dataset[0]]
-
+    friends_val_season = ["s01", "s02", "s04"] if data_config.subject_id == "sub-04" else ["s01", "s02", "s04", "s05", "s06"]
+    friends_val_season.remove(training_season)
+    friends_val_dataset = random.choice(friends_val_season)
+    val_friends_set_alpha = [x for x in val_friends_set if x.split("-")[-1][:3] == friends_val_dataset]
 
     # Movie10
-    movie_val_name = random.sample(val_movie10_data_list, 1)
-    val_movie_set_alpha = []
-    for run in val_movie10_set:
-        parts = run.split("_")
-        data_filename = ''.join([char for char in parts[1].split('-')[1] if not char.isdigit()])
-        if data_filename == movie_val_name[0]:
-            val_movie_set_alpha.append(run)
+    movie_val_name = random.choice(val_movie10_data_list)
+    val_movie_set_alpha = [run for run in val_movie10_set if ''.join([char for char in run.split("_")[1].split('-')[1] if not char.isdigit()]) == movie_val_name]
 
 
     # Iterate over each alpha value
@@ -1124,35 +1080,20 @@ def find_best_alpha_across_data(data_config, training_season, train_friends_set,
 
         # Train Ridge model
         model = train_ridgeReg_noCV(x_train, y_train, alpha=alpha)
-
-            # Compute validation MSE for each validation run
-        for val_run in val_friends_set_alpha:
+        
+        for val_run in val_friends_set_alpha + val_movie_set_alpha:
+            val_type = "friends" if val_run in val_friends_set_alpha else "movie10"
             val_run_list = [val_run]
-            y_val, length_val = build_val_target(data_config, val_run_list, "friends")
-            val_embeddings, _, _= process_embeddings(data_config, "friends", val_run_list, data_config.embedding_layer)
-         
-           
-            x_val_ = extract_feature_regressor(data_config, "friends", val_embeddings, val_run_list, length_val)
-            x_val = np.concatenate(x_val_, axis=0)
 
-        # Predict on validation set and compute MSE
-            val_preds = model.predict(x_val)
-            val_mse = mean_squared_error(y_val, val_preds)
-            print(f"val_mse for {alpha} is {val_mse} for friends val {val_run}")
-            alpha_performance[alpha].append(val_mse)
-
-
-        for val_run in val_movie_set_alpha:
-            val_run_list = [val_run]
-            y_val, length_val = build_val_target(data_config, val_run_list, "movie10")
-            val_embeddings, _, _ = process_embeddings(data_config, "movie10", val_run_list, data_config.embedding_layer)
-            x_val_ = extract_feature_regressor(data_config, "movie10", val_embeddings, val_run_list, length_val)
+            y_val, length_val = build_val_target(data_config, val_run_list, val_type)
+            val_embeddings, _, _ = process_embeddings(data_config, val_type, val_run_list, data_config.embedding_layer)
+            x_val_ = extract_feature_regressor(data_config, val_type, val_embeddings, val_run_list, length_val)
             x_val = np.concatenate(x_val_, axis=0)
 
             # Predict on validation set and compute MSE
             val_preds = model.predict(x_val)
             val_mse = mean_squared_error(y_val, val_preds)
-            print(f"val_mse for {alpha} is {val_mse} for friends val {val_run}")
+            print(f"val_mse for {alpha} is {val_mse} for {val_type} val {val_run}")
             alpha_performance[alpha].append(val_mse)
 
          
@@ -1207,3 +1148,40 @@ def get_within_ridge_average(data_config, train_data_filenames):
     mean_img.to_filename(f"{folder_to_save}/{mean_img_name}")
 
     
+
+
+def get_across_ridge_average(data_config, train_data_filenames):
+
+    spare_datasets =  ["wolf", "bourne"]
+
+    for training in ["wolf", "bourne"]:
+        
+
+
+        root_folder_to_save= f"{data_config.output_dir}/{data_config.encoding_level}/{data_config.subject_id}/{data_config.experiment}/{training}/{train_data_filenames}/"
+        folder_to_save = f"{root_folder_to_save}/mean_img"
+        create_folder(folder_to_save)
+        spare_datasets_copy = [ds for ds in spare_datasets if ds != training]
+        # Define dataset to iterate
+        dataset_to_iterate = ["figures", "life", spare_datasets_copy[0], "s01", "s02", "s04", "s05", "s06"]
+        if train_data_filenames in dataset_to_iterate:
+            dataset_to_iterate.remove(train_data_filenames)
+
+
+        for dataset in dataset_to_iterate:
+            all_epi = []
+            pattern = f"{root_folder_to_save}/*_{dataset}*_RidgeReg_R2_val_gpt2_layer_{data_config.embedding_layer}.nii.gz"
+
+            
+            print(f"Constructed pattern: {pattern}")
+            matching_files = glob.glob(pattern)
+            print(f"Matching files: {matching_files}")
+            
+            for filename in matching_files:
+                all_epi.append(filename)  # Append filename to all_epi if it matches
+
+            if all_epi:
+                mean_img = image.mean_img(all_epi)
+                print("Saving the mean image")
+                mean_img_name = f"{data_config.subject_id}_{dataset}_mean_R2_layer_{data_config.embedding_layer}.nii.gz"
+                mean_img.to_filename(f"{folder_to_save}/{mean_img_name}")
